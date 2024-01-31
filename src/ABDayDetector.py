@@ -31,7 +31,7 @@ class Log:
 
 class Updater:
 
-    VERSION = "0.3"
+    VERSION = "0.2"
 
     DOWNLOAD_URL = "https://update.ab.download.noahf.net/"
     CHECK_URL = "https://update.ab.check.noahf.net/"
@@ -55,7 +55,8 @@ class Updater:
             unit_divisor=1024
         ) as bar:
             for data in request.iter_content(chunk_size=1024):
-                if "DEV_BUILD = True" in str(data):
+                # separated into numerous strings as to not trip the system itself lol
+                if "DEV_BUILD " + "=" + " True" in str(data):
                     raise RuntimeError("Download refused by safety mechanism, found possible dev build download.\n\n" + ("*" * 60) + "\n IF YOU SEE THIS, PLEASE CONTACT NOAH AT www.noahf.net \n" + ("*" * 60) + "\n\n")
                 all_data.append(data)
                 bar.update(len(data))
