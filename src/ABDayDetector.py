@@ -55,7 +55,8 @@ class Updater:
             unit_divisor=1024
         ) as bar:
             for data in request.iter_content(chunk_size=1024):
-                if "VERSION = " in str(data) and not "VERSION = " + str(self.latest_version) in str(data):
+                if 'VERSION = ' in str(data) and not ("VERSION = \"" + str(self.latest_version) + "\"" in str(data)):
+                    Log.text("Uh oh! Cannot find 'VERSION = \"" + str(self.latest_version) + "\"' in data ('" + str(data) + "')")
                     raise RuntimeError("Download refused by safety mechanism, found possibly outdated version (GitHub not updating raw.githubusercontent.com?). This may warrant the user to contact Noah at www.noahf.net")
 
                 # separated into numerous strings as to not trip the system itself lol
@@ -78,10 +79,15 @@ class Updater:
         Log.text("[  --------- BEGIN UPDATE DOWNLOADER ---------  ]")
         try:
             try:
-                request = requests.get(self.DOWNLOAD_URL).text
+                Log.text("Sending request for data to " + str(self.DOWNLOAD_URL) + "...")
+                request = requests.get(self.DOWNLOAD_URL)
+                Log.text("Received response from " + str(request.url) + "!")
+                request = request.text
+                Log.text("Received " + str(len(request.split("\n"))) + " line(s) of data")
                 json_data = json.loads(request)
             except Exception as err:
-                Log.text("Failed to get from " + self.DOWNLOAD_URL + ", ignorately assuming file and folder")
+                Log.text("Failed to get from " + self.DOWNLOAD_URL + ", ignorantly assuming file and folder")
+                Log.text("(This sometimes happens because the school blocked 'api.github.com')")
                 json_data = {
                     "tree": [
                             {"path": "ABDayDetector.py"}
@@ -89,7 +95,10 @@ class Updater:
                     }
 
             FOLDER = "https://raw.githubusercontent.com/nfranks8036/ABDayDetectorScript/main/src/"
+            Log.text("Folder of all files set to " + str(FOLDER) + ", lookings to download " + str(len(json_data["tree"])) + " file(s)")
 
+            Log.text("Executing ~" + str(len(json_data["tree"])) + " download(s)...")
+            Log.text(" ")
             tree = json_data["tree"]
             file_urls = []
             for file in tree:
@@ -438,9 +447,10 @@ class Commands:
 
     def upgrade(self, ui, args):
         printF(" ")
-        if ui.updater.delta_version == 0:
-            printF("&cYou are NOT using outdated software.")
-            printF(f"&7&oIf this is a mistake, please check &b&n{Constants.GITHUB_LINK}")
+        if ui.updater.delta_version == 0 and not (len(args) == 1 and "force" in args[0]):
+            printF("&aYou are using the latest version. =D")
+            printF(f'&7&oIf this is a mistake, you can force an update by typing "&bupgrade force&r&7&o" &8(this is generally not advised)')
+            printF(" ")
             return True
         elif ui.updater.delta_version == -1 and (len(args) == 1 and "confirm" in args[0]):
             printF("&cWe failed to detect if you are behind in version.")
@@ -463,7 +473,7 @@ class Commands:
             printF("&cYou cancelled the update!")
             printF(" ")
         except Exception as err:
-            printF("&cFailed to upgrade fully, error: &8" + str(err) + " &cof type &8" + str(type(err)))
+            printF("&cFailed to upgrade this script, error: &8" + str(err) + " &cof type &8" + str(type(err)))
             printF("&cPlease check for updates manually at &b" + Constants.GITHUB_LINK)
             printF("&cAlternately, contact Noah for help at &bwww.noahf.net")
             printF(" ")
