@@ -55,7 +55,7 @@ class Updater:
             unit_divisor=1024
         ) as bar:
             for data in request.iter_content(chunk_size=1024):
-                if 'VERSION = ' in str(data) and not ("VERSION = \"" + str(self.latest_version) + "\"" in str(data)):
+                if 'VERSION = \"' in str(data) and not ("VERSION = \"" + str(self.latest_version) + "\"" in str(data)):
                     Log.text("Uh oh! Cannot find 'VERSION = \"" + str(self.latest_version) + "\"' in data ('" + str(data) + "')")
                     raise RuntimeError("Download refused by safety mechanism, found possibly outdated version (GitHub not updating raw.githubusercontent.com?). This may warrant the user to contact Noah at www.noahf.net")
 
@@ -73,6 +73,7 @@ class Updater:
             raise RuntimeError("Failed to download file from url '" + str(url) + "'")
 
         Log.text("<- Downloaded '" + str(url) + "'")
+        Log.text(" ")
 
     def start_download(self):
         self.download_error = None
@@ -401,6 +402,10 @@ def as_epoch(date: datetime.date):
     
     return round(datetime.combine(date, time).timestamp())
 
+def get_last_day_of_month(day):
+    next_month = day.replace(day=28) + timedelta(days=4)
+    return next_month - timedelta(days=next_month.day)
+
 class Commands:
     def register(self, data: dict, function):
         self.commands[data["name"]] = {
@@ -444,6 +449,18 @@ class Commands:
              "aliases": ["update", "improve", "updates", "upgrades"]},
             self.upgrade
         )
+        self.register(
+            {"name": "restart",
+             "aliases": ["rs", "reboot", "rb"]},
+            self.restart
+        )
+
+    def restart(self, ui, args):
+        printF(" ")
+        printF(" ")
+        printF("&2Restarting script, please wait...")
+        os.startfile(__file__)
+        exit()
 
     def upgrade(self, ui, args):
         printF(" ")
@@ -469,6 +486,11 @@ class Commands:
 
             if ui.updater.download_error is not None:
                 raise ui.updater.download_error
+
+            printF("&aUpdate successful!")
+            printF("&fYou &cMUST &frestart the script to see changes.")
+            printF("&fType \"&brestart&f\" in the console window.")
+            printF(" ")
         except KeyboardInterrupt as keyboard:
             printF("&cYou cancelled the update!")
             printF(" ")
@@ -485,6 +507,7 @@ class Commands:
         delta = ui.updater.delta_version
         if len(args) > 0 and "--detail" in args[0]:
             printF(f"Found version: {Updater.VERSION}")
+            printF(f"Latest version: {str(ui.updater.latest_version)}")
             printF(f"Delta: {str(delta)}")
             printF(f"Dev build: {str(Updater.DEV_BUILD).upper()}")
             printF(" ")
@@ -558,6 +581,8 @@ class UserInterface:
         self.commands = commands
         self.updater = updater
 
+        now = datetime.now()
+
         Log.text("Clearing console, as it's no longer needed for debugging purposes...")
         Log.text(" ")
         Log.text(" ")
@@ -565,18 +590,31 @@ class UserInterface:
         Log.text(" ")
 
         cmd("cls")
-        printF("&6SCHOOL DAY DETECTOR")
-        printF("Welcome to the the school day detector.")
+        printF(f"&6SCHOOL DAY DETECTOR &8v{Updater.VERSION}")
+        printF("&e| &fWelcome to the the school day detector.")
         printF(" ")
         printF("&6WHAT?")
-        printF("This program lets you figure out if a day is going to be an A day or a B day.")
-        printF("It also lets you figure out WHY a day is off.")
+        printF("&e| &fThis program lets you figure out if a day is going to be an A day or a B day.")
+        printF("&e| &fIt also lets you figure out WHY a day is off.")
+        printF("&e| &fNOTE: It can change at anytime due to snow-days, but simply re-run the program and")
+        printF("&e| &f      it should update with snow days automatically.")
         printF(" ")
         printF("&6HOW?")
-        printF("Enter a date below and the program will give you all information about it.")
-        printF("The format should be: &aMONTH DAY YEAR")
-        printF("For example: &e" + datetime.now().strftime("%B %d %Y"))
+        printF("&e| &fEnter a date below and the program will give you all information about it.")
+        printF("&e|  ")
+        printF("&e|   &r&6A SINGLE DATE:")
+        printF("&e|   &r&5| &fThe format should be: &aMONTH DAY YEAR")
+        printF("&e|   &r&5| &fFor example: &r&3" + now.strftime("%B %d %Y"))
+        printF("&e|  ")
+        printF("&e|   &r&6MULTIPLE DATES:")
+        printF("&e|   &r&5| &fThe format should be: &aMONTH DAY-DAY YEAR")
+        printF("&e|   &r&5| &fFor example: &r&3" + now.strftime("%B") + " 1-" + str(get_last_day_of_month(now).day) + " " + now.strftime("%Y"))
         printF(" ")
+        if self.updater.delta_version > 0:
+            printF("&6YOU ARE OUTDATED!")
+            printF("&e| &fCheck what version you're using by typing \"&bversion&f\"")
+            printF("&e| &fUpgrade your script automatically by typing \"&bupgrade&f\" &c&l(RECOMMENDED ASAP)")
+            printF(" ")
         self.ask_input()
 
     def error(self, msg, err):
