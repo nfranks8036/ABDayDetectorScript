@@ -31,7 +31,7 @@ class Log:
 
 class Updater:
 
-    VERSION = "0.2"
+    VERSION = "0.3"
 
     DOWNLOAD_URL = "https://update.ab.download.noahf.net/"
     CHECK_URL = "https://update.ab.check.noahf.net/"
@@ -55,6 +55,9 @@ class Updater:
             unit_divisor=1024
         ) as bar:
             for data in request.iter_content(chunk_size=1024):
+                if "VERSION = " in str(data) and not "VERSION = " + str(self.latest_version) in str(data):
+                    raise RuntimeError("Download refused by safety mechanism, found possibly outdated version (GitHub not updating raw.githubusercontent.com?). This may warrant the user to contact Noah at www.noahf.net")
+
                 # separated into numerous strings as to not trip the system itself lol
                 if "DEV_BUILD " + "=" + " True" in str(data):
                     raise RuntimeError("Download refused by safety mechanism, found possible dev build download.\n\n" + ("*" * 60) + "\n IF YOU SEE THIS, PLEASE CONTACT NOAH AT www.noahf.net \n" + ("*" * 60) + "\n\n")
@@ -115,6 +118,7 @@ class Updater:
 
             latest_data = json.loads(check_content)
             self.delta_version = 0
+            self.latest_version = latest_data["latest"]
             Log.text("Found latest data: " + str(latest_data))
             if not latest_data["latest"] == self.VERSION:
                 Log.text("** OUT OF DATE **")
@@ -454,7 +458,7 @@ class Commands:
             ui.updater.start_download()
 
             if ui.updater.download_error is not None:
-                raise RuntimeError("Download unsuccessful") from ui.updater.download_error
+                raise ui.updater.download_error
         except KeyboardInterrupt as keyboard:
             printF("&cYou cancelled the update!")
             printF(" ")
