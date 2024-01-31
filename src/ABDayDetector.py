@@ -1,4 +1,5 @@
 import requests
+from tqdm import tqdm
 import traceback
 import os
 import sys
@@ -27,31 +28,81 @@ class Log:
         return Log.log_history
 
 class Updater:
+
+    VERSION = "0.2"
+    
     DOWNLOAD_URL = "https://update.ab.download.noahf.net/"
     CHECK_URL = "https://update.ab.check.noahf.net/"
-    VERSION = "0.1"
+    DEV_BUILD = True
+
+    BLOCK_SIZE = 1024
+
+    def download(self, url, path):
+        Log.text("-> Downloading " + str(url))
+        if self.DEV_BUILD == True:
+            raise ValueError("Download refused, is dev build? " + DEV_BUILD)
+        request = requests.get(url, stream=True)
+        total_size = int(request.headers.get("content-length", 0))
+        with tqdm(total=total_size, unit="B", unit_scale=True) as progress_bar:
+            with open(path, "wb") as file:
+                for data in request.iter_content(self.BLOCK_SIZE):
+                    progress_bar.update(len(data))
+                    file.write(data)
+
+        if total_size != 0 and progress_bar.n != total_size:
+            raise RuntimeError("Failed to download file from url '" + str(url) + "'")
+
+        Log.text("<- Downloaded " + str(url))
+
+    def start_download(self):
+        Log.text("[  --------- BEGIN UPDATE DOWNLOADER ---------  ]")
+        try:
+            try:
+                request = requests.get(self.DOWNLOAD_URL).text
+                json_data = json.loads(request)
+            except Exception as err:
+                Log.text("Failed to get from " + self.DOWNLOAD_URL + ", ignorately assuming file and folder")
+                json_data = {
+                    "tree": [
+                            {"path": "ABDayDetector.py"}
+                        ]
+                    }
+
+            FOLDER = "https://raw.githubusercontent.com/nfranks8036/ABDayDetectorScript/main/src/"
+
+            tree = json_data["tree"]
+            file_urls = []
+            for file in tree:
+                self.download(FOLDER + str(file["path"]), str(file["path"]))
+        except Exception as err:
+            Log.text(traceback.format_exc().strip())
+            Log.text("DOWNLOADER FAILED: " + str(type(err)) + " " + str(err))
+            self.download_error = err
+        Log.text("[  --------- END CHECK FOR UPDATES ---------  ]")
     
     def __init__(self):
+        Log.text("[  --------- BEGIN CHECK FOR UPDATES ---------  ]")
         try:
-            Log.text("[  --------- BEGIN CHECK FOR UPDATES ---------  ]")
+
             Log.text("Initializing updater...")
             Log.text("Found environment: " + str({
                 "downloadUrl": self.DOWNLOAD_URL,
                 "checkUrl": self.CHECK_URL,
-                "currentVersion": self.VERSION}))
+                "currentVersion": self.VERSION}
+            ))
 
-            self.check = requests.get(self.CHECK_URL)
-            # self.check_content = self.check.text
-            self.check_content = "\n".join(open("version-history.json", "r").readlines())
-            Log.text("Found " + str(len(self.check_content.split("\n"))) + " lines (" + self.check.url + ")")
+            check = requests.get(self.CHECK_URL)
+            check_content = check.text
+            Log.text("Found " + str(len(check_content.split("\n"))) + " lines (" + check.url + ")")
 
-            self.latest_data = json.loads(self.check_content)
-            Log.text("Found latest data: " + str(self.latest_data))
-            if self.latest_data["latest"] != self.VERSION:
+            latest_data = json.loads(check_content)
+            self.delta_version = 0
+            Log.text("Found latest data: " + str(latest_data))
+            if not latest_data["latest"] == self.VERSION:
                 Log.text("** OUT OF DATE **")
-                self.delta_version = 0
+                self.delta_version = -1
 
-                for index, version_from_history in enumerate(self.latest_data["history"]):
+                for index, version_from_history in enumerate(latest_data["history"]):
                     if self.VERSION == version_from_history:
                         Log.text("(found old version match " + self.VERSION + " == " + version_from_history + ", at index = " + str(index) + ")")
                         self.delta_version = index + 1
@@ -59,7 +110,13 @@ class Updater:
 
                 Log.text("by " + str(self.delta_version) + " versions")
 
-            Log.text("[  --------- END CHECK FOR UPDATES ---------  ]")
+            if self.delta_version == -1:
+                Log.text("Final call: OUT OF DATE?")  
+            elif self.delta_version == 0:
+                Log.text("Final call: ZERO VERSIONS BEHIND!")
+            elif self.delta_version > 0:
+                Log.text(f"Final call: {str(self.delta_version)} versions behind")
+
         except Exception as err:
             self.error = err
             Log.text(traceback.format_exc().strip())
@@ -71,6 +128,8 @@ class Updater:
             Log.text("**    PLEASE CONTACT NOAH F:    **")
             Log.text("**        www.noahf.net         **")
             Log.text("**********************************")
+
+        Log.text("[  --------- END CHECK FOR UPDATES ---------  ]")
 
 class DatesFinder:
     def __init__(self):
@@ -319,7 +378,7 @@ class Commands:
             }
         print("Registered command: " + str(data))
 
-    def evaluate(self, inputted) -> bool:
+    def evaluate(self, ui, inputted) -> bool:
         inputted_command = inputted.split(" ")[0]
 
         inputted_args = inputted.split(" ")
@@ -334,7 +393,7 @@ class Commands:
             if key.lower() in command_info["data"]["aliases"]:
                 command = command_info
                 break
-        return command["func"](inputted_args) if command is not None else False
+        return command["func"](ui, inputted_args) if command is not None else False
 
     def __init__(self):
         self.commands = {}
@@ -344,8 +403,33 @@ class Commands:
              "aliases": ["showlogs", "log"]},
             self.logs
         )
+        self.register(
+            {"name": "version",
+             "aliases": ["ver", "v"]},
+            self.version
+        )
 
-    def logs(self, args):
+    def version(self, ui, args):
+        printF(" ")
+        if len(args) > 0 and "--detail" in args[0]:
+            printF(f"Found version: {Updater.VERSION}")
+            printF(f"Delta: {str(ui.updater.delta_version)}")
+            printF(f"Dev build: {str(Updater.DEV_BUILD).upper()}")
+            printF(" ")
+            return True
+
+        printF(f"&fThis script is using ABDayDetector version {Updater.VERSION} (Python {str(sys.version).split(' ')[0]}) (Is dev build? {str(Updater.DEV_BUILD).upper()})")
+        if ui.updater.delta_version == 0:
+            printF("&aYou are on the latest version!")
+        elif ui.updater.delta_version > 0:
+            printF(f"&eYou are {str(ui.updater.delta_version)} version(s) behind!")
+        elif ui.updater.delta_version == -1:
+            printF("&cError checking version status. Check for updates manually at &egithub.com/nfranks8036/ABDayDetectorScript")
+
+        printF(" ")
+        return True
+
+    def logs(self, ui, args):
         printF(" ")
         printF("&6LOG HISTORY:")
         for index, line in enumerate(Log.get_log_history()):
@@ -353,7 +437,7 @@ class Commands:
         printF(" ")
         return True
 
-    def show_days_off(self, args):
+    def show_days_off(self, ui, args):
         printF(" ")
         printF("&6DAYS OFF:")
 
@@ -395,9 +479,10 @@ class UserInterface:
     def printF(string):
         print(UserInterface.color_full(string + "&r"))
     
-    def __init__(self, ab_date_assigner: ABDateAssigner, commands: Commands):
+    def __init__(self, ab_date_assigner: ABDateAssigner, commands: Commands, updater: Updater):
         self.assigner = ab_date_assigner
         self.commands = commands
+        self.updater = updater
 
         Log.text("Clearing console, as it's no longer needed for debugging purposes...")
         Log.text(" ")
@@ -511,7 +596,7 @@ class UserInterface:
         for ordinal in ["st", "nd", "rd", "th"]:
             inputted = inputted.replace(ordinal, "")
 
-        if self.commands.evaluate(inputted.strip()):
+        if self.commands.evaluate(self, inputted.strip()):
             self.ask_input()
             return
 
@@ -598,7 +683,7 @@ if __name__ == "__main__":
 
         Log.text("Instantiating UserInterface...")
 
-        ui = UserInterface(assigner, commands)
+        ui = UserInterface(assigner, commands, updater)
     except Exception as err:
         print("A fatal exception has occurred. The program will exit momentary.")
         print("Found error that may be related: " + str(err))
