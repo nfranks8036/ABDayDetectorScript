@@ -5,6 +5,7 @@ import os
 import sys
 import math
 import json
+import time as threadcontrol
 from datetime import datetime, timedelta, date, time
 
 def cmd(command):
@@ -15,6 +16,7 @@ class Constants:
     DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
     MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
     RCPS_WEBSITE = "https://www.rcps.us"
+    GITHUB_LINK = "github.com/nfranks8036/ABDayDetectorScript/releases"
 
 class Log:
     log_history = []
@@ -29,32 +31,46 @@ class Log:
 
 class Updater:
 
-    VERSION = "0.2"
-    
+    VERSION = "0.3"
+
     DOWNLOAD_URL = "https://update.ab.download.noahf.net/"
     CHECK_URL = "https://update.ab.check.noahf.net/"
-    DEV_BUILD = True
+    DEV_BUILD = False
 
     BLOCK_SIZE = 1024
 
     def download(self, url, path):
-        Log.text("-> Downloading " + str(url))
+        Log.text("-> Downloading '" + str(url) + "'")
         if self.DEV_BUILD == True:
-            raise ValueError("Download refused, is dev build? " + DEV_BUILD)
+            raise ValueError("Download refused by client, is dev build? " + str(self.DEV_BUILD).upper())
         request = requests.get(url, stream=True)
-        total_size = int(request.headers.get("content-length", 0))
-        with tqdm(total=total_size, unit="B", unit_scale=True) as progress_bar:
-            with open(path, "wb") as file:
-                for data in request.iter_content(self.BLOCK_SIZE):
-                    progress_bar.update(len(data))
-                    file.write(data)
+        #file_size = int(request.headers.get('Content-Length', 0))
+        file_size = len(request.content)
+        all_data = []
+        with tqdm(
+            desc=path,
+            total=file_size,
+            unit='iB',
+            unit_scale=True,
+            unit_divisor=1024
+        ) as bar:
+            for data in request.iter_content(chunk_size=1024):
+                if "DEV_BUILD = True" in str(data):
+                    raise RuntimeError("Download refused by safety mechanism, found possible dev build download.\n\n" + ("*" * 60) + "\n IF YOU SEE THIS, PLEASE CONTACT NOAH AT www.noahf.net \n" + ("*" * 60) + "\n\n")
+                all_data.append(data)
+                bar.update(len(data))
 
-        if total_size != 0 and progress_bar.n != total_size:
+        with open(path, "wb") as file:
+            for datum in all_data:
+                file.write(datum)
+
+        if file_size != 0 and round(bar.n / 100) != round(file_size / 100):
             raise RuntimeError("Failed to download file from url '" + str(url) + "'")
 
-        Log.text("<- Downloaded " + str(url))
+        Log.text("<- Downloaded '" + str(url) + "'")
 
     def start_download(self):
+        self.download_error = None
         Log.text("[  --------- BEGIN UPDATE DOWNLOADER ---------  ]")
         try:
             try:
@@ -73,12 +89,13 @@ class Updater:
             tree = json_data["tree"]
             file_urls = []
             for file in tree:
-                self.download(FOLDER + str(file["path"]), str(file["path"]))
+                self.download(FOLDER + str(file["path"]), os.path.basename(__file__))
         except Exception as err:
             Log.text(traceback.format_exc().strip())
             Log.text("DOWNLOADER FAILED: " + str(type(err)) + " " + str(err))
             self.download_error = err
         Log.text("[  --------- END CHECK FOR UPDATES ---------  ]")
+        Log.text(" ")
     
     def __init__(self):
         Log.text("[  --------- BEGIN CHECK FOR UPDATES ---------  ]")
@@ -265,7 +282,7 @@ class DayLetter:
 
 class DateType:
     SCHOOL_DAY = 0
-    SUMMER = 1
+    OUT_OF_SCOPE = 1
     WEEKEND = 2
     DAY_OFF = 3
     EXAM_DAY = 4
@@ -275,7 +292,7 @@ class DateType:
         if integer_type == 0:
             return "SCHOOL_DAY"
         elif integer_type == 1:
-            return "SUMMER"
+            return "OUT_OF_SCOPE"
         elif integer_type == 2:
             return "WEEKEND"
         elif integer_type == 3:
@@ -289,7 +306,7 @@ class DateType:
         if integer_type == 0:
             return "a school Day"
         elif integer_type == 1:
-            return "a day in summer"
+            return "not in this school year"
         elif integer_type == 2:
             return "a weekend"
         elif integer_type == 3:
@@ -313,7 +330,7 @@ class ABDateAssigner:
         
         value = DateType.SCHOOL_DAY
         if as_epoch(date) < as_epoch(self.year_start) or as_epoch(date) > as_epoch(self.year_end):
-            value = DateType.SUMMER
+            value = DateType.OUT_OF_SCOPE
         elif date.weekday() == 5 or date.weekday() == 6:
             value = DateType.WEEKEND
         elif date in self.days_off.keys():
@@ -379,7 +396,7 @@ class Commands:
         print("Registered command: " + str(data))
 
     def evaluate(self, ui, inputted) -> bool:
-        inputted_command = inputted.split(" ")[0]
+        inputted_command = inputted.split(" ")[0].lower()
 
         inputted_args = inputted.split(" ")
         inputted_args.pop(0)
@@ -387,10 +404,10 @@ class Commands:
         command = None
         for key in self.commands:
             command_info = self.commands[key]
-            if key.lower() == inputted_command.lower():
+            if inputted_command == key.lower():
                 command = command_info
                 break
-            if key.lower() in command_info["data"]["aliases"]:
+            if inputted_command in command_info["data"]["aliases"]:
                 command = command_info
                 break
         return command["func"](ui, inputted_args) if command is not None else False
@@ -408,12 +425,52 @@ class Commands:
              "aliases": ["ver", "v"]},
             self.version
         )
+        self.register(
+            {"name": "upgrade",
+             "aliases": ["update", "improve", "updates", "upgrades"]},
+            self.upgrade
+        )
+
+    def upgrade(self, ui, args):
+        printF(" ")
+        if ui.updater.delta_version == 0:
+            printF("&cYou are NOT using outdated software.")
+            printF(f"&7&oIf this is a mistake, please check &b&n{Constants.GITHUB_LINK}")
+            return True
+        elif ui.updater.delta_version == -1 and (len(args) == 1 and "confirm" in args[0]):
+            printF("&cWe failed to detect if you are behind in version.")
+            printF('&eTo confirm you would like to upgrade, type "&bupgrade confirm&e"')
+            printF("&eThere is not necessarily any risk to upgrading unless you tinkered with the program.")
+            printF("&eIf you tinkered with it, it could override any changes you made.")
+            printF("&bContact Noah if any issuess arise, see contacts at &9www.noahf.net")
+            return True
+
+        try:
+            printF("&7&oStarting upgrade processs...")
+            printF("&7&oPress 'CTRL' + 'C' if you wish to cancel.")
+            printF(" ")
+            threadcontrol.sleep(3) # time.sleep(3)
+            ui.updater.start_download()
+
+            if ui.updater.download_error is not None:
+                raise RuntimeError("Download unsuccessful") from ui.updater.download_error
+        except KeyboardInterrupt as keyboard:
+            printF("&cYou cancelled the update!")
+            printF(" ")
+        except Exception as err:
+            printF("&cFailed to upgrade fully, error: &8" + str(err) + " &cof type &8" + str(type(err)))
+            printF("&cPlease check for updates manually at &b" + Constants.GITHUB_LINK)
+            printF("&cAlternately, contact Noah for help at &bwww.noahf.net")
+            printF(" ")
+        return True
 
     def version(self, ui, args):
         printF(" ")
+
+        delta = ui.updater.delta_version
         if len(args) > 0 and "--detail" in args[0]:
             printF(f"Found version: {Updater.VERSION}")
-            printF(f"Delta: {str(ui.updater.delta_version)}")
+            printF(f"Delta: {str(delta)}")
             printF(f"Dev build: {str(Updater.DEV_BUILD).upper()}")
             printF(" ")
             return True
@@ -422,9 +479,11 @@ class Commands:
         if ui.updater.delta_version == 0:
             printF("&aYou are on the latest version!")
         elif ui.updater.delta_version > 0:
-            printF(f"&eYou are {str(ui.updater.delta_version)} version(s) behind!")
+            printF(f"&eYou are {str(delta)} version{'' if delta == 1 else 's'} behind!")
+            printF('&eUpdate by typing "&bupgrade&e"!')
         elif ui.updater.delta_version == -1:
-            printF("&cError checking version status. Check for updates manually at &egithub.com/nfranks8036/ABDayDetectorScript")
+            printF("&cError checking version status.")
+            printF(f"&f&oCheck for updates manually at &b&n{Constants.GITHUB_LINK}")
 
         printF(" ")
         return True
@@ -631,6 +690,8 @@ class UserInterface:
             return prefix + ("&c" if day_letter == DayLetter.A_DAY else "&9") + DayLetter.format(day_letter)
         elif not day_off_reason == None:
             return prefix + "&e" + day_off_reason
+        if date_type == DateType.OUT_OF_SCOPE:
+            return prefix + "&4not in this school year"
         else:
             return prefix + "&2" + DateType.format(date_type)
         raise RuntimeError("Information was not handled nor provided correctly to self.provide_information")
@@ -662,6 +723,7 @@ if __name__ == "__main__":
     Log.text("Loading program...")
     try:
         Log.text("Date and time: " + str(datetime.now()))
+        Log.text("Main file: " + os.path.basename(__file__) + " (path: " + str(__file__) + ")")
         Log.text("Is non-IDLE? " + str(UserInterface.is_external()))
         Log.text("Loading color and title...")
         cmd("color")
