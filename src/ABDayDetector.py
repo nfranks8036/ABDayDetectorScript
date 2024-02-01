@@ -31,7 +31,7 @@ class Log:
 
 class Updater:
 
-    VERSION = "0.3"
+    VERSION = "1.0.0"
 
     DOWNLOAD_URL = "https://update.ab.download.noahf.net/"
     CHECK_URL = "https://update.ab.check.noahf.net/"
@@ -376,6 +376,16 @@ class ABDateAssigner:
             return None
 
         return self.days_off[date]
+
+    def get_next_school_day(self, from_date):
+        date = self.normalize(from_date)
+
+        for index in range(0, 14):
+            date = date + timedelta(days=1)
+            if self.get_date_type(date) == DateType.SCHOOL_DAY:
+                return date
+
+        return None
     
     def __init__(self, website: RCPSWebsiteReader):
         # self.today = datetime.now()
@@ -454,6 +464,11 @@ class Commands:
              "aliases": ["rs", "reboot", "rb"]},
             self.restart
         )
+        self.register(
+            {"name": "today",
+             "aliases": []},
+            self.today
+        )
 
     def restart(self, ui, args):
         printF(" ")
@@ -496,9 +511,22 @@ class Commands:
             printF(" ")
         except Exception as err:
             printF("&cFailed to upgrade this script, error: &8" + str(err) + " &cof type &8" + str(type(err)))
-            printF("&cPlease check for updates manually at &b" + Constants.GITHUB_LINK)
+            printF("&cPlease check for updates manually at &b" + Updater.CHECK_URL)
             printF("&cAlternately, contact Noah for help at &bwww.noahf.net")
             printF(" ")
+        return True
+
+    def today(self, ui, args):
+        try:
+            possible_proxy = datetime.strptime(" ".join(args), "%B %d %Y") if len(args) > 0 else None
+            printF(" ")
+            if possible_proxy is not None:
+                printF("&8&o(Proxy Date: " + str(" ".join(args)) + ")")
+            printF(ui.get_today_string(possible_proxy))
+            printF(" ")
+        except Exception as err:
+            printF("&cAn error occurred, possible invalid proxy date? &8" + str(err))
+
         return True
 
     def version(self, ui, args):
@@ -521,7 +549,7 @@ class Commands:
             printF('&eUpdate by typing "&bupgrade&e"!')
         elif ui.updater.delta_version == -1:
             printF("&cError checking version status.")
-            printF(f"&f&oCheck for updates manually at &b&n{Constants.GITHUB_LINK}")
+            printF(f"&f&oCheck for updates manually at &b&n{Updater.CHECK_URL}")
 
         printF(" ")
         return True
@@ -604,7 +632,7 @@ class UserInterface:
         printF("&e|  ")
         printF("&e|   &r&6A SINGLE DATE:")
         printF("&e|   &r&5| &fThe format should be: &aMONTH DAY YEAR")
-        printF("&e|   &r&5| &fFor example: &r&3" + now.strftime("%B %d %Y"))
+        printF("&e|   &r&5| &fFor example: &r&3" + now.strftime("%B " + self.number_of(now) + " %Y"))
         printF("&e|  ")
         printF("&e|   &r&6MULTIPLE DATES:")
         printF("&e|   &r&5| &fThe format should be: &aMONTH DAY-DAY YEAR")
@@ -615,7 +643,20 @@ class UserInterface:
             printF("&e| &fCheck what version you're using by typing \"&bversion&f\"")
             printF("&e| &fUpgrade your script automatically by typing \"&bupgrade&f\" &c&l(RECOMMENDED ASAP)")
             printF(" ")
+        printF(self.get_today_string())
+        printF(" ")
         self.ask_input()
+
+    def number_of(self, date):
+        return date.strftime("%d").lstrip('0')
+
+    def get_today_string(self, proxy_date=None):
+        now = datetime.now() if proxy_date == None else proxy_date
+        suffix = ""
+        next_day = self.assigner.get_next_school_day(now)
+        if next_day is not None:
+            suffix = " " + next_day.strftime("%A, %B " + self.number_of(next_day)) + " will be " + self.provide_information(next_day, prefix="")
+        return "&fToday is " + self.provide_information(now, prefix="") + "&f." + suffix
 
     def error(self, msg, err):
         printF(" ")
@@ -705,12 +746,13 @@ class UserInterface:
 
     def ask_input(self, forced: str=None):
         inputted = input(UserInterface.color_full("Enter date or command: &b")) if forced == None else forced
-        for ordinal in ["st", "nd", "rd", "th"]:
-            inputted = inputted.replace(ordinal, "")
 
         if self.commands.evaluate(self, inputted.strip()):
             self.ask_input()
             return
+
+        for ordinal in ["st", "nd", "rd", "th"]:
+            inputted = inputted.replace(ordinal, "")
 
         date = self.try_input(None, inputted, "%B %d %Y")
         date = self.try_input(date, inputted, "%b %d %Y")
@@ -732,12 +774,12 @@ class UserInterface:
 
         self.ask_input()
 
-    def provide_information(self, date):
+    def provide_information(self, date, prefix=None):
         date_type = self.assigner.get_date_type(date)
         day_letter = self.assigner.get_day_letter(date)
         day_off_reason = self.assigner.get_day_off_reason(date)
         
-        prefix = ("That day is " if isinstance(date, list) == False else "")
+        prefix = (("That day is " if isinstance(date, list) == False else "") if prefix == None else prefix) + "&r"
         
         if not day_letter == None:
             return prefix + ("&c" if day_letter == DayLetter.A_DAY else "&9") + DayLetter.format(day_letter)
