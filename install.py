@@ -1,13 +1,14 @@
 # needed:
 # requests
 # tqdm
-
 import os
 import sys
 import importlib
 import traceback
 import json
 import time as threadcontrol
+
+VERSION = "0.2i-020124"
 
 def cmd(command):
     if is_external():
@@ -48,7 +49,7 @@ def printF(string):
     print(color_full(string + "&r"))
 
 def ask_input(directions, denied_func):
-    inputted = input(color_full(directions + "&b"))
+    inputted = input(color_full(directions + "&b")).strip()
     CONSENT = ["yes", "y", "yep", "okay", "yeah", "ye", "confirm", "agree", "agreed"]
     if inputted.lower() in CONSENT:
         return True
@@ -59,7 +60,7 @@ def file_denied():
     printF(" ")
     printF("&c&l&nYou have declined an important file download.")
     printF("&fBy doing this, you &c&ncannot&r &futilize this program.")
-    printF("&fRe-run the script if you would like to reconsider.")
+    printF("&fRe-run the script if you would like to try again.")
     printF("&fOtherwise, thank you for checking this out, goodbye...")
     printF("&7&oPress any key to exit.")
     cmd("pause >NUL")
@@ -68,7 +69,8 @@ def file_denied():
 def try_import(name, import_name, import_string):
     try:
         importlib.import_module(import_name)
-        printF("&a✓ &fModule dependency satisfied: " + str(name) + import_string)
+        printF(" ")
+        printF("&aâœ“ &fModule dependency satisfied: " + str(name) + import_string)
         return True
     except ModuleNotFoundError:
         return False
@@ -88,8 +90,9 @@ def ask_dependency(name, import_name, desc):
     printF(" ")
     ask_input("&fWould you like to install '&b" + str(name) + "&f' (&aY&f/&cN&f)? ", file_denied)
     printF(" ")
-    printF("&fDownloading and installing " + str(name) + import_name + "...")
-    os.system("python -m pip install " + str(real_name) + " >null 2>&1")
+    printF("&7&oDownloading and installing " + str(name) + import_name + "...")
+    printF("&7&oThis may take a moment...&f")
+    os.system("python -m pip install " + str(real_name) + " >NUL")
     if try_import(name, real_name, import_name) == False:
         printF("&cFailed to install dependency: " + str(name) + import_name)
         printF("&cContact Noah at &bwww.noahf.net")
@@ -100,18 +103,18 @@ def ask_dependency(name, import_name, desc):
 
 if __name__ == "__main__":
     try:
-        cmd("title Install: SCHOOL DAY DETECTOR (ABDayDetector.py)")
+        cmd("title School Day Detector Installer")
 
-        printF("&6SCHOOL DAY DETECTOR: &b&lINSTALLER")
+        printF("&6SCHOOL DAY DETECTOR: &b&lINSTALLER &8v" + VERSION)
         printF("&e| &fWelcome to the the school day detector INSTALLER.")
         printF(" ")
         printF("&6INSTALL PROGRAM:")
         printF("&e| &fYou are going to install the School Day Detector program for RCPS.")
         printF("&e| &fThis process should be pretty painless and easy.")
-        printF("&e| &fFollow the prompts, you can type '&aY&f' for yes and '&cN&f' for no.")
+        printF("&e| &fFollow the prompts, you can type '&aY&f' for yes and '&cN&f' for no, it is not case sensitive.")
         printF(" ")
         printF("&6NOTE ABOUT CONSENT:")
-        printF("&e| &fBy not consenting to a required dependency installation, &c&nyou will not be able to use this program.")
+        printF("&e| &fBy not consenting to a required dependency installation, &c&nyou will not be able to use this program&r&f.")
         printF(" ")
         printF(" ")
         ask_input("&fDo you understand the directions (&aY&f/&cN&f)? ", exit)
@@ -157,8 +160,7 @@ if __name__ == "__main__":
         if main == None:
             raise RuntimeError("Failed to find main file, maybe it's not the same string (by literal)?")
 
-        printF("&a✓ &fDownloaded main script.")
-        printF(" ")
+        printF("&aâœ“ &fDownloaded main script.")
         printF(" ")
         printF("&6BOOM!")
         printF("&e| &fYou're done! You just finished installing the correct files and dependencies.")
