@@ -9,6 +9,10 @@ import time as threadcontrol
 from datetime import datetime, timedelta, date, time
 
 def cmd(command):
+    # if we're using IDLE to see sys.out, then we probably don't want to execute commands
+    # (opening commands in IDLE just opens a cmd.exe window for a few seconds, which is pointless as it
+    #  doesn't affect the IDLE window)
+    # (external here counts as not in the python idle window)
     if UserInterface.is_external():
         os.system(command)
 
@@ -18,6 +22,9 @@ class Constants:
     RCPS_WEBSITE = "https://www.rcps.us"
     GITHUB_LINK = "github.com/nfranks8036/ABDayDetectorScript/releases"
 
+# Log.text(str) is a replacement of print() when the program is starting so the history
+# can be saved and viewed later via the command "logs"
+# (that is seriously the only reason this exists)
 class Log:
     log_history = []
     
@@ -29,21 +36,26 @@ class Log:
     def get_log_history():
         return Log.log_history
 
+# Updates the program when it becomes out of date
 class Updater:
 
+    # this is the version the program thinks it is, please do not change
     VERSION = "1.0.0"
 
     DOWNLOAD_URL = "https://update.ab.download.noahf.net/"
     CHECK_URL = "https://update.ab.check.noahf.net/"
-    DEV_BUILD = False
+    DEV_BUILD = False # True will prevent users from downloading this file or you from uploading it
 
     BLOCK_SIZE = 1024
 
+    # download a specified URL
+    # the "path" is where the file is going to be saved to in the current working directory (CWD)
     def download(self, url, path):
         Log.text("-> Downloading '" + str(url) + "'")
         if self.DEV_BUILD == True:
+            # do NOT download dev builds, they were likely uploaded by accident
             raise ValueError("Download refused by client, is dev build? " + str(self.DEV_BUILD).upper())
-        request = requests.get(url, stream=True)
+        request = requests.get(url, stream=True) #stream required for future "tqdm"
         #file_size = int(request.headers.get('Content-Length', 0))
         file_size = len(request.content)
         all_data = []
@@ -55,6 +67,10 @@ class Updater:
             unit_divisor=1024
         ) as bar:
             for data in request.iter_content(chunk_size=1024):
+                # if the version is not what it says it is, then we should not install this version
+                # it is likely that github hasn't updated githubusercontent.com yet for this file, even though
+                # version-history.json is up-to-date
+                # This problem in the way it was described is usually solved within 12 hours or less
                 if 'VERSION = \"' in str(data) and not ("VERSION = \"" + str(self.latest_version) + "\"" in str(data)):
                     Log.text("Uh oh! Cannot find 'VERSION = \"" + str(self.latest_version) + "\"' in data ('" + str(data) + "')")
                     raise RuntimeError("Download refused by safety mechanism, found possibly outdated version (GitHub not updating raw.githubusercontent.com?). This may warrant the user to contact Noah at www.noahf.net")
@@ -65,16 +81,23 @@ class Updater:
                 all_data.append(data)
                 bar.update(len(data))
 
+        # we download the data first, then place it in a file in case the download fails at any point
+        # we do not want a half-written file because the internet connection stopped midway through download
+        # this is how Google Play Store and Apple App Store work with "Downloading" and then "Installing"
         with open(path, "wb") as file:
             for datum in all_data:
                 file.write(datum)
 
+        # bar.n is ultimately how much data was downloaded, so we can compare this to what the file size
+        # should be to determine if it all successfully downloaded, += 100 bytes (hence the "file_size / 100")
         if file_size != 0 and round(bar.n / 100) != round(file_size / 100):
             raise RuntimeError("Failed to download file from url '" + str(url) + "'")
 
         Log.text("<- Downloaded '" + str(url) + "'")
         Log.text(" ")
 
+    # starting the downloda does not necessarily mean this function downloads the data but rather
+    # starts the child downloads of the files. see Updater.download for the function that downloads
     def start_download(self):
         self.download_error = None
         Log.text("[  --------- BEGIN UPDATE DOWNLOADER ---------  ]")
@@ -87,6 +110,8 @@ class Updater:
                 Log.text("Received " + str(len(request.split("\n"))) + " line(s) of data")
                 json_data = json.loads(request)
             except Exception as err:
+                # the school blocks api.github.com on school computers, thus this would fail every time if
+                # this was not a check. githubusercontent is not blocked and thus we will ignorantly use that
                 Log.text("Failed to get from " + self.DOWNLOAD_URL + ", ignorantly assuming file and folder")
                 Log.text("(This sometimes happens because the school blocked 'api.github.com')")
                 json_data = {
@@ -127,6 +152,10 @@ class Updater:
             Log.text("Found " + str(len(check_content.split("\n"))) + " lines (" + check.url + ")")
 
             latest_data = json.loads(check_content)
+
+            # delta_version = 0 means the program is up-to-date
+            # delta_version > 0 means the program is out-of-date by x versions
+            # delta_version = -1 means the program can't find how far out-of-date it is (could be a dev build)
             self.delta_version = 0
             self.latest_version = latest_data["latest"]
             Log.text("Found latest data: " + str(latest_data))
@@ -163,9 +192,14 @@ class Updater:
 
         Log.text("[  --------- END CHECK FOR UPDATES ---------  ]")
 
+# attempts to find the file in which Roanoke County contains all days off and why
+# this was originally not a problem but then I discovered that the county CHANGES
+# the URL everytime they update it, which makes it a pain to keep up-to-date without
+# this method. It searches the HTML for a file 'src=' that starts with /cms/lib and
+# contains 'aDayBDay_Dates' (as the county so lovingly calls it)
 class DatesFinder:
     def __init__(self):
-        Log.text("[  --------- BEGIN DATES SRC FINDER ---------  ]")
+        Log.text("[  --------- BEGIN DATES FILE FINDER ---------  ]")
         Log.text("Searching with base url '" + Constants.RCPS_WEBSITE + "'")
         self.url = None
         self.content = requests.get(Constants.RCPS_WEBSITE).text
@@ -173,12 +207,18 @@ class DatesFinder:
 
         for index, line in enumerate(self.content.split("\n")):
             if not "/cms/lib/" in line:
+                # not an interesting line lol
                 continue
             if not "aDayBDay_Dates" in line:
+                # sure it's a /cms/lib, but not helpful to us
                 Log.text("Invalid /cms/lib line found: (" + str(index) + ") " + line + " (FAILED TO FIND aDayBDay_Dates)")
                 continue
             Log.text("Valid /cms/lib line found: (" + str(index) + ") " + line)
             begin_index = line.index('src="')
+            # often the line looks like
+            # <script src="/cms/lib/whatever/aDayBDay_dates_whatever">
+            # so if we find the src= and cut everything off before it
+            # then we split it at the quotation marks and get the first element, we have the URL (almost)
             Log.text("Begin index of 'src=' at " + str(begin_index))
             line = line[begin_index:len(line)]
             Log.text("Found URI of file to be at (excluding domain): " + str(line.split('"')[1]))
@@ -186,7 +226,7 @@ class DatesFinder:
             Log.text("New URL set to '" + self.url + "' (line #" + str(index) + ")")
             break
 
-        Log.text("[  --------- END DATES SRC FINDER ---------  ]")
+        Log.text("[  --------- END DATES FILE FINDER ---------  ]")
 
     def get_url(self):
         return self.url
@@ -216,6 +256,7 @@ class RCPSWebsiteReader:
             Log.text("** Inspected lines will be cherry-picked via if they match conditions **")
             for line in self.content.split("\n"):
                 if "ListOfDaysOff =" in line:
+                    # we are now reading the days off and the program needs to know lmao
                     reading_days_off = True
                     Log.text("---[ Now reading days off and their reason ]---")
                     continue
@@ -232,6 +273,7 @@ class RCPSWebsiteReader:
 
                 if reading_days_off == True:
                     if "]" in line:
+                        # arrays in JS end in "]", we know we're done with days off now
                         Log.text("Inspecting: " + str(line))
                         Log.text("Discovered NO LONGER reading days off, removing var")
                         reading_days_off = False
@@ -246,10 +288,17 @@ class RCPSWebsiteReader:
                     if not len(elements) == 5:
                         Log.text("List element does not split properly, ignoring this element.")
                         continue
+
+                    # lines often look like: new Date("August 1, 2023 12:00:00")
+                    # we can split at " and get first element ([0])
                         
                     date = elements[1]
                     reason = elements[3]
 
+                    # we need a way to verify the line, thus we use the month
+                    # the constants class contains every month that could possibly exist
+                    # and since the date will need a month (because, it's a *DATE*), this
+                    # becomes a reliable way to check for validity
                     valid = False
                     for month in Constants.MONTHS:
                         if month in date:
@@ -276,6 +325,9 @@ class RCPSWebsiteReader:
         return self.year_end
 
 class DayLetter:
+    # A day is always true and B day is always false
+    # this is also how the county calculates it in their own calculation
+    
     A_DAY = True
     B_DAY = False
 
@@ -297,10 +349,10 @@ class DayLetter:
 
 class DateType:
     SCHOOL_DAY = 0
-    OUT_OF_SCOPE = 1
+    OUT_OF_SCOPE = 1 # the county calls this "SUMMER" for some fricking reason
     WEEKEND = 2
     DAY_OFF = 3
-    EXAM_DAY = 4
+    EXAM_DAY = 4 # not used in this program because I haven't seen it used since 2021, can't be bothered to implement tbh
 
     @staticmethod
     def value_of(integer_type: int):
@@ -331,9 +383,15 @@ class DateType:
         return None
 
 class ABDateAssigner:
+    # ordinal number examples:
+    # first (1st), second (2nd), third (3rd)
+    # as opposed to cardinal:
+    # one (1), two (2), three (3)
     def get_ordinal_ending(self, cardinal):
         return "th" if 11 <= cardinal <= 13 else ("th" if cardinal % 10 > 3 else (["th", "st", "nd", "rd", "th"][cardinal % 10]))
 
+    # datetime has "date", "datetime", and "time" objects
+    # we ONLY want date objects (time is unnecessary), so we normalize it into a "date" object
     def normalize(self, unknown_datetime_object):
         obj = unknown_datetime_object
         if isinstance(obj, datetime):
@@ -345,8 +403,11 @@ class ABDateAssigner:
         
         value = DateType.SCHOOL_DAY
         if as_epoch(date) < as_epoch(self.year_start) or as_epoch(date) > as_epoch(self.year_end):
+            # after a certain day in august and before a certain day in may
             value = DateType.OUT_OF_SCOPE
         elif date.weekday() == 5 or date.weekday() == 6:
+            # weekday == 5 (saturday)
+            # weekday == 6 (sunday)
             value = DateType.WEEKEND
         elif date in self.days_off.keys():
             value = DateType.DAY_OFF
@@ -366,6 +427,10 @@ class ABDateAssigner:
                 day_letter = not day_letter
             current_date = current_date + timedelta(days=1)
 
+        # this is the same as going through every day since the beginning of the year and
+        # counting "A" then "B" then "A" while skipping days off, breaks, and weekends accurately
+        # (except this is much faster cuz hooman slow, compter fast)
+
         return day_letter
         
 
@@ -379,6 +444,10 @@ class ABDateAssigner:
 
     def get_next_school_day(self, from_date):
         date = self.normalize(from_date)
+
+        # thursday -> friday
+        # friday -> monday
+        # friday -> tuesday (if we have monday off)
 
         for index in range(0, 14):
             date = date + timedelta(days=1)
@@ -403,11 +472,16 @@ class ABDateAssigner:
         self.days_off = website.get_days_off()
         Log.text("Found " + str(len(self.days_off.keys())) + " days off")
 
+    def get_days_off(self):
+        return self.days_off
+
+# as epoch (or unix time) in seconds
 def as_epoch(date: datetime.date):
     if date == None:
         return None
 
     # month, day, and year DO NOT matter here because we're just getting the time in the end
+    # going with the counties reason as to why 12pm, +- an hour will not matter here for DST reasons
     time = datetime(year=1, month=1, day=1, hour=12, minute=0, second=0).time()
     
     return round(datetime.combine(date, time).timestamp())
@@ -416,15 +490,32 @@ def get_last_day_of_month(day):
     next_month = day.replace(day=28) + timedelta(days=4)
     return next_month - timedelta(days=next_month.day)
 
+# commands are the alternate to writing a date in the command line
+# they execute arbitrary code with certain argumetns
 class Commands:
     def register(self, data: dict, function):
+        # structure:
+        # {[
+        #   "command_name": {
+        #       "data": {
+        #           "name": "command_name",
+        #           "aliases": ["alias1", "alias2"]
+        #       },
+        #       "func": <internal function>
+        #   }
+        # ]}
+        
         self.commands[data["name"]] = {
             "data": data,
             "func": function
             }
         print("Registered command: " + str(data))
 
+    # evaluates a given input from the command line, usually barely touched by the program already
     def evaluate(self, ui, inputted) -> bool:
+        # example input
+        # command argument1 argument2 argument3
+        
         inputted_command = inputted.split(" ")[0].lower()
 
         inputted_args = inputted.split(" ")
@@ -433,42 +524,82 @@ class Commands:
         command = None
         for key in self.commands:
             command_info = self.commands[key]
-            if inputted_command == key.lower():
+            if inputted_command == key.lower(): # check if they executed command name
                 command = command_info
                 break
-            if inputted_command in command_info["data"]["aliases"]:
+            if inputted_command in command_info["data"]["aliases"]: # check if they executed alias
                 command = command_info
                 break
         return command["func"](ui, inputted_args) if command is not None else False
 
+    # register all the commands because yes this is necessary and no I'm not doing the python
+    # version of java reflections, this is easier for now
     def __init__(self):
         self.commands = {}
 
         self.register(
+            {"name": "help",
+             "aliases": ["?", "/help"],
+             "desc": "Displays this help menu"},
+            self.help
+        )
+        self.register(
             {"name": "logs",
-             "aliases": ["showlogs", "log"]},
+             "aliases": ["showlogs", "log"],
+             "desc": "Shows any log messages that occurred when the program started."},
             self.logs
         )
         self.register(
             {"name": "version",
-             "aliases": ["ver", "v"]},
+             "aliases": ["ver", "v"],
+             "desc": "Checks the version of the program and how far behind it is."},
             self.version
         )
         self.register(
             {"name": "upgrade",
-             "aliases": ["update", "improve", "updates", "upgrades"]},
+             "aliases": ["update", "improve", "updates", "upgrades"],
+             "desc": "Upgrades the program to the latest version if applicable."},
             self.upgrade
         )
         self.register(
             {"name": "restart",
-             "aliases": ["rs", "reboot", "rb"]},
+             "aliases": ["rs", "reboot", "rb"],
+             "desc": "Closes and re-opens the program; performs a restart."},
             self.restart
         )
         self.register(
             {"name": "today",
-             "aliases": []},
+             "aliases": [],
+             "desc": "Checks the A or B day status of the current day."},
             self.today
         )
+        self.register(
+            {"name": "daysoff",
+             "aliases": ["showdaysoff", "showbreak", "showbreaks", "breaks", "break"],
+             "desc": "Shows all days off and breaks for the current school year."},
+            self.show_days_off
+        )
+
+    def help(self, ui, args):
+        printF(" ")
+        printF("&6AVAILABLE COMMANDS:")
+        for key in self.commands:
+            command = self.commands[key]
+            printF("&b" + str(command["data"]["name"]) + "&f: " + str(command["data"]["desc"]))
+        printF(" ")
+        printF("&6AVAILABLE DATE FORMATS:")
+        for date_format in ui.date_formats:
+            raw_format = date_format
+            character_map = {
+                "%B": "MMMMM",
+                "%b": "MMM",
+                "%#d": "d",
+                "%Y": "YYYY"}
+            for key in character_map.keys():
+                date_format = date_format.replace(key, character_map[key])
+            printF("&b" + str(date_format) + "&f: " + datetime.now().strftime(raw_format))
+        printF(" ")
+        return True
 
     def restart(self, ui, args):
         printF(" ")
@@ -476,6 +607,8 @@ class Commands:
         printF("&2Restarting script, please wait...")
         os.startfile(__file__)
         exit()
+        printF("&7&oYou may close this terminal window.")
+        return True
 
     def upgrade(self, ui, args):
         printF(" ")
@@ -563,13 +696,28 @@ class Commands:
         return True
 
     def show_days_off(self, ui, args):
+        days_off = ui.assigner.get_days_off()
         printF(" ")
-        printF("&6DAYS OFF:")
+        printF(f"&6DAYS OFF: &7({str(len(days_off.keys()))})")
+        for index, key in enumerate(days_off.keys()):
+            # Feb 12 2024 -> Parent-Teacher Conf
+            printF(str(days_off.get(index + 1))) 
+            printF(str(key) + ":" + str(days_off[key]))
+        printF(" ")
+        return True
 
+# the user interface
+# the MOTD and instructions
+# the command input
 class UserInterface:
+    # separators are how exactly you can specify multiple dates
+    # for example:
+    # January 1-31 2024 is just as valid as January 1->31 2024
+    # January 1 2024 - Februrary 1 2024 will be just as valid as January 1 2024 -> February 1 2024
     SEPARATORS = ["-", "->", "/", "//", "|"]
     
-    def is_external(): # detects if the user is running in IDLE or not (used for color support and whatnot)
+    def is_external():
+        # detects if the user is running in IDLE or not (used for color support and whatnot)
         return False if 'idlelib.run' in sys.modules else True
 
     def color(string, keycode, color):
@@ -577,6 +725,8 @@ class UserInterface:
         return string
 
     def color_full(string):
+        # yes these are minecraft: java edition color codes
+        # no I refuse to give them up, I know them like the back of my hand
         string = UserInterface.color(string, "&0", "\u001b[30m")
         string = UserInterface.color(string, "&1", "\u001b[34m")
         string = UserInterface.color(string, "&2", "\u001b[32m")
@@ -602,12 +752,20 @@ class UserInterface:
 
     global printF
     def printF(string):
+        # &r at the end because otherwise it will carry over into the next line (no flush?)
         print(UserInterface.color_full(string + "&r"))
     
     def __init__(self, ab_date_assigner: ABDateAssigner, commands: Commands, updater: Updater):
         self.assigner = ab_date_assigner
         self.commands = commands
         self.updater = updater
+
+        self.date_formats = [
+            "%B %#d %Y",
+            "%b %#d %Y",
+            "%B %#d, %Y",
+            "%b %#d, %Y"
+        ]
 
         now = datetime.now()
 
@@ -638,7 +796,7 @@ class UserInterface:
         printF("&e|   &r&5| &fThe format should be: &aMONTH DAY-DAY YEAR")
         printF("&e|   &r&5| &fFor example: &r&3" + now.strftime("%B") + " 1-" + str(get_last_day_of_month(now).day) + " " + now.strftime("%Y"))
         printF(" ")
-        if self.updater.delta_version > 0:
+        if self.updater.delta_version > 0: # user needs to update teehee
             printF("&6YOU ARE OUTDATED!")
             printF("&e| &fCheck what version you're using by typing \"&bversion&f\"")
             printF("&e| &fUpgrade your script automatically by typing \"&bupgrade&f\" &c&l(RECOMMENDED ASAP)")
@@ -647,6 +805,9 @@ class UserInterface:
         printF(" ")
         self.ask_input()
 
+    # removes the extra zero in %d strftime in datetime
+    # like how it does November 01 2024
+    # I don't like that so I made it left-strip it of any zeros
     def number_of(self, date):
         return date.strftime("%d").lstrip('0')
 
@@ -654,8 +815,10 @@ class UserInterface:
         now = datetime.now() if proxy_date == None else proxy_date
         suffix = ""
         next_day = self.assigner.get_next_school_day(now)
-        if next_day is not None:
-            suffix = " " + next_day.strftime("%A, %B " + self.number_of(next_day)) + " will be " + self.provide_information(next_day, prefix="")
+
+        if next_day is not None: #don't show next school day if it's not a school day lol
+            suffix = " " + next_day.strftime("%A, %B " + self.number_of(next_day) + self.assigner.get_ordinal_ending(next_day.day)) + " will be " + self.provide_information(next_day, prefix="")
+            
         return "&fToday is " + self.provide_information(now, prefix="") + "&f." + suffix
 
     def error(self, msg, err):
@@ -664,11 +827,11 @@ class UserInterface:
         printF("&cAN ERROR OCCURRED!")
         if not err == None:
             printF("&cWe found this error to be the possible culprit: &8" + str(err))
-            printF("&c&oIt's possible this is not your fault!")
+            printF("&c&oIt's possible you entered something wrong or the program is faulty (try updating if outdated)")
             printF("&cSupplementary Message: &8" + msg)
         else:
             printF("&c&oWe found this message relating to your error:")
-            printF(str(msg))
+            printF("&7&o" + str(msg))
         printF(" ")
 
         self.ask_input()
@@ -680,20 +843,23 @@ class UserInterface:
     # Jan 17, 2024 - Jan 18, 2024
     # Jan 17, 2024-Jan 18, 2024
 
+    # parse a specific date, will return a list if multiple (Jan 17-18 2024 for example)
+    # or a single date if not multiple
     def parse(self, user_input, format_type):
-        tokens = user_input.split(" ")
+        tokens = user_input.split(" ") 
         if len(tokens) == 3:
-            month = tokens[0]
-            year = tokens[2]
+            # example input: Jan 1-31 2024
+            month = tokens[0] # the month of the example input is the first element
+            year = tokens[2] # the year of the example input is the second element
             returned = []
-            for separator in UserInterface.SEPARATORS:
-                dates = tokens[1].split(separator)
+            for separator in UserInterface.SEPARATORS: # check all legal separators
+                dates = tokens[1].split(separator) # 1-31 can be split into [1, 31]
                 if not len(dates) == 2:
                     continue
                 minimum = min(int(dates[0]), int(dates[1]))
                 maximum = max(int(dates[0]), int(dates[1]))
 
-                for i in range(minimum, maximum+1):
+                for i in range(minimum, maximum+1): # add all legal dates between the two min and max inputs
                     returned.append(datetime.strptime(f"{month} {str(i)} {year}", format_type))
 
             if len(returned) != 0:
@@ -703,12 +869,16 @@ class UserInterface:
                 
         return datetime.strptime(user_input, format_type)
 
+    # try a specifc input with a random format_tpye
     def try_input(self, previous_date, user_input, format_type):
         if not isinstance(previous_date, Exception) and not isinstance(previous_date, list) and previous_date != None:
             return previous_date
         
         try:
             new_date = None
+
+            # might rewrite this one day whenever it starts pissing me off
+            # cuz not even i really know what's happening here and can't explain some of it 
             if not isinstance(previous_date, list) and True == False:
                 new_date = []
                 for separator in UserInterface.SEPARATORS:
@@ -745,21 +915,30 @@ class UserInterface:
             return err
 
     def ask_input(self, forced: str=None):
-        inputted = input(UserInterface.color_full("Enter date or command: &b")) if forced == None else forced
+        inputted = input(UserInterface.color_full("&fEnter date or command: &b")) if forced == None else forced
+        if inputted.strip() == "":
+            self.ask_input()
+            return
 
+        # execute any potential commands, if the evaluate func returns "True", we know it was a real command
         if self.commands.evaluate(self, inputted.strip()):
             self.ask_input()
             return
 
+        # remove ordinals from date input as they could be not allowed
+        # for example: January 1st, 2024 (illegal input) -> January 1, 2024 (valid input)
         for ordinal in ["st", "nd", "rd", "th"]:
             inputted = inputted.replace(ordinal, "")
 
-        date = self.try_input(None, inputted, "%B %d %Y")
-        date = self.try_input(date, inputted, "%b %d %Y")
-        date = self.try_input(date, inputted, "%B %d, %Y")
-        date = self.try_input(date, inputted, "%b %d, %Y")
+        # trying different input dates as the user may have their preference
+        date = None
+        for date_format in self.date_formats:
+            date = self.try_input(date, inputted, date_format.replace("#", ""))
 
         if isinstance(date, Exception) or date == None:
+            if isinstance(date, ValueError) and "does not match format" in str(date):
+                self.error("You entered an incorrect date format or command.\nTry typing \"&nhelp&r&7&o\" for help.", None)
+                return
             self.error("Standard error of type " + str(type(date)), date)
             return
 
@@ -814,6 +993,7 @@ class UserInterface:
             for date in item:
                 printF(date)
 
+# program start
 if __name__ == "__main__":
     Log.text("Loading program...")
     try:
@@ -821,7 +1001,7 @@ if __name__ == "__main__":
         Log.text("Main file: " + os.path.basename(__file__) + " (path: " + str(__file__) + ")")
         Log.text("Is non-IDLE? " + str(UserInterface.is_external()))
         Log.text("Loading color and title...")
-        cmd("color")
+        cmd("color") # necessary on windows 10 I believe
         cmd("title School Day Detector - Retrieving Data...")
 
         Log.text("Still in __name__ (" + str(__name__) + "), instantiating valued classes...")
@@ -834,9 +1014,9 @@ if __name__ == "__main__":
         
         Log.text("Enjoy the program, made with <3 by Noah Franks")
         Log.text("| -> MAIN WEBSITE: www.noahf.net")
-        Log.text("| -> WEBSITE COUNTERPART: www.noahf.net/school/days")
-        Log.text("| -> LET'S GO TERRIERS!")
-        Log.text("| -> CREATED IN JAN 2024")
+        Log.text("| -> WEBSITE COUNTERPART: www.noahf.net/school/days") # currently not operational as of Feb 1 2024
+        Log.text("| -> LET'S GO TERRIERS!") # WBHS!!!!!!!!!
+        Log.text("| -> CREATED IN JAN 2024") # modified in the following months
 
         Log.text("Instantiating UserInterface...")
 
@@ -847,6 +1027,8 @@ if __name__ == "__main__":
 
     cmd("pause >NUL")
 
+
+    # see some old code when I was initally testing in VERY mid January:
     #test_day = datetime(month=1, day=17, year=2024)
     
     #print("DATE TYPE: " + str(DateType.value_of(assigner.get_date_type(test_day))))

@@ -1,0 +1,48 @@
+https://www.rcps.us/site/handlers/filedownload.ashx?moduleinstanceid=11408&dataid=22971&FileName=Acceptable_Computer_System_Use.pdf
+
+Guidelines:
+(1) The program is not used to access in any wayn illicit or illegal material.
+(2) The program will not access any of the following;
+	(2a) Material covered by Va. Code 18.2-374.1:1, 18 U.S.C. 2256, which both cover CSAM material.
+	(2b) Material covered by Va. Code 18.2-372 or 18 U.S.C. 1460, which both cover obscenity
+	(2c) Material the school division shall deem harmful to juivilines or minors, defined by Va. Code 18.2-390 and 47 U.S.C. 254(h)(7)(G)
+(3) The program is not used to access any form of malware
+(4) The program understands that it can be monitored, and as it does not break any provisions, there should be no worry.
+(5) The program cannot be used in any way to aid cyberbullying or bullying in general.
+(6) The program is not encouraging nor using "hacking" or derivative methods
+(7) No usernames, passwords, or sensitive data is used, viewed, transmitted, or received. This program will not attempt to use your data, see code.
+(8) The program does not utilize, transmit, receive, or otherwise capture images of minors. The program also does not use any camera-related equipment and is incapable of reading such data.
+(9) The program is safe.
+
+Terms and Conditions
+(A1) Does not apply
+(A2) The current school day is legitimate school business and can aid in productivity.
+(B) A reasonable policy which depends on the user.
+(C1) No illegal or unauthorized activites occur within the program, Python is a legal program on the school computer as it is offered in Software Center as of February 1st, 2024
+(C2) No downloaded files are illegal, private, or confidential. They are all public information available at www.rcps.us
+(C3) See (C2)
+(C4) The program has no financial gain or incentive.
+(C5) The downloaded files are less than 500MB.
+(C6) See (C2)
+(C7) The program does not post, publish, nor transmits any data
+(C8) No illciit material is shown as the program only contacts GITHUB and RCPS.US
+(C9) A reasonable policy which depends on the user.
+(C10) No data on the host computer are destroyed, deleted, nor tampered with. No viruses nor malware are spread on the host computer as the program is incapable.
+(C11) The program is unable to produce this behavior.
+(C12)(C13)(C14) See (C11)
+(C15) The program does not log your data and thus cannot use any data that would impersonate you.
+(C16) The program does not modify transmitted and received data on the host machine.
+(C17) The program does not impede the host machine, thus will not interrupt nor impede user learning unless via distraction.
+(C18) See (C10)
+(C19) The program is not ran as administrator and thus cannot modify with any administrator or root permissions and data.
+(D1)(D2)(D3)(D4)(D5)(D6) A reasonable policy which depends on the user.
+(E1)(E2)(E3)(E4)(E5)(E6)(E7)(E8)(E9)(E10)(E11) Not applicable.
+(F1)(F2)(F3)(F4)(F5)(F6)(F7)(F8)(F9)(F10)(F11) Not applicable.
+(G) The user should be assured that this should be of no liability to the user, though no promises can be made.
+(H) The program is extremely secure as it has extremely basic features.
+(I) The program does not vandalize.
+(J) A reasonable policy which depends on the user.
+(K)(L) Not applicable.
+
+Guidelines of Internet Safety
+Not at all applicable as the user is responsible for their own device. 

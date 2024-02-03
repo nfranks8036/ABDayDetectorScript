@@ -70,7 +70,7 @@ def try_import(name, import_name, import_string):
     try:
         importlib.import_module(import_name)
         printF(" ")
-        printF("&aâœ“ &fModule dependency satisfied: " + str(name) + import_string)
+        printF("&a✓ &fModule dependency satisfied: " + str(name) + import_string)
         return True
     except ModuleNotFoundError:
         return False
@@ -160,7 +160,7 @@ if __name__ == "__main__":
         if main == None:
             raise RuntimeError("Failed to find main file, maybe it's not the same string (by literal)?")
 
-        printF("&aâœ“ &fDownloaded main script.")
+        printF("&a✓ &fDownloaded main script.")
         printF(" ")
         printF("&6BOOM!")
         printF("&e| &fYou're done! You just finished installing the correct files and dependencies.")
