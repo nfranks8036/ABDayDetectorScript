@@ -40,7 +40,7 @@ class Log:
 class Updater:
 
     # this is the version the program thinks it is, please do not change
-    VERSION = "1.1"
+    VERSION = "1.1.1"
 
     DOWNLOAD_URL = "https://update.ab.download.noahf.net/"
     CHECK_URL = "https://raw.githubusercontent.com/nfranks8036/ABDayDetectorScript/main/version-history.json"
@@ -868,7 +868,7 @@ class UserInterface:
             printF("&c&oIt's possible you entered something wrong or the program is faulty (try updating if outdated)")
             printF("&cSupplementary Message: &8" + msg)
         else:
-            printF("&cWe found this message relating to your errorasdf:")
+            printF("&cWe found this message relating to your error:")
             printF("&7&o" + str(msg))
         printF(" ")
 
