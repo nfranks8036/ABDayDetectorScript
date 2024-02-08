@@ -40,7 +40,7 @@ class Log:
 class Updater:
 
     # this is the version the program thinks it is, please do not change
-    VERSION = "1.0.0"
+    VERSION = "1.1"
 
     DOWNLOAD_URL = "https://update.ab.download.noahf.net/"
     CHECK_URL = "https://raw.githubusercontent.com/nfranks8036/ABDayDetectorScript/main/version-history.json"
