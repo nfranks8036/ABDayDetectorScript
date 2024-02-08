@@ -43,7 +43,7 @@ class Updater:
     VERSION = "1.0.0"
 
     DOWNLOAD_URL = "https://update.ab.download.noahf.net/"
-    CHECK_URL = "https://update.ab.check.noahf.net/"
+    CHECK_URL = "https://raw.githubusercontent.com/nfranks8036/ABDayDetectorScript/main/version-history.json"
     DEV_BUILD = False # True will prevent users from downloading this file or you from uploading it
 
     BLOCK_SIZE = 1024
@@ -574,8 +574,8 @@ class Commands:
             self.today
         )
         self.register(
-            {"name": "daysoff",
-             "aliases": ["showdaysoff", "showbreak", "showbreaks", "breaks", "break"],
+            {"name": "showdaysoff",
+             "aliases": ["daysoff", "show_days_off", "showbreak", "showbreaks", "breaks", "break"],
              "desc": "Shows all days off and breaks for the current school year."},
             self.show_days_off
         )
@@ -696,13 +696,51 @@ class Commands:
         return True
 
     def show_days_off(self, ui, args):
-        days_off = ui.assigner.get_days_off()
+        days_off = {}
+        last_index = 0
+        last_day = None
+        for index, key in enumerate(ui.assigner.get_days_off()):
+            # Feb 12 2024: Parent-Teacher Conf
+            # Dec 16 2023 - Jan 2 2024:
+            reason = ui.assigner.get_days_off()[key]
+            is_multiple_days = last_day != None and as_epoch(key) - as_epoch(last_day) == 86400 and days_off[last_index]["reason"] == reason
+            if is_multiple_days == True:
+                days_off[last_index] = {
+                    "from": days_off[last_index]["from"],
+                    "to": key,
+                    "reason": days_off[last_index]["reason"]
+                }
+                last_day = key
+                continue
+            last_index += 1
+            if is_multiple_days == False:
+                days_off[last_index] = {
+                    "from": key,
+                    "to": key,
+                    "reason": reason
+                }
+            last_day = key
+        now = datetime.now()
+        now_epoch = as_epoch(now)
+        printed = False
         printF(" ")
         printF(f"&6DAYS OFF: &7({str(len(days_off.keys()))})")
-        for index, key in enumerate(days_off.keys()):
-            # Feb 12 2024 -> Parent-Teacher Conf
-            printF(str(days_off.get(index + 1))) 
-            printF(str(key) + ":" + str(days_off[key]))
+        for key in days_off.keys():
+            from_date = days_off[key]["from"]
+            to_date = days_off[key]["to"]
+            reason = days_off[key]["reason"]
+
+            date_before = as_epoch(days_off[key - 1]["from"]) if as_epoch(now) < as_epoch(ui.assigner.year_start) else as_epoch(ui.assigner.year_start)
+            if printed == False and date_before < now_epoch and as_epoch(from_date) > now_epoch:
+                printF("&7&o" + now.strftime("%b " + ui.number_of(now) + " %Y") + " -> " + ui.provide_information(now, prefix="", colored=False))
+                printed = True
+
+            prefix = ("&3" if as_epoch(from_date) > now_epoch else "&c") + from_date.strftime("%b " + ui.number_of(from_date) + " %Y")
+            if from_date != to_date:
+                prefix = prefix + " &7-> " + ("&3" if as_epoch(to_date) > now_epoch else "&c") + to_date.strftime("%b " + ui.number_of(to_date) + " %Y")
+            prefix = prefix + "&f: "
+            
+            printF(prefix + "&e" + reason)
         printF(" ")
         return True
 
@@ -830,7 +868,7 @@ class UserInterface:
             printF("&c&oIt's possible you entered something wrong or the program is faulty (try updating if outdated)")
             printF("&cSupplementary Message: &8" + msg)
         else:
-            printF("&c&oWe found this message relating to your error:")
+            printF("&cWe found this message relating to your errorasdf:")
             printF("&7&o" + str(msg))
         printF(" ")
 
@@ -953,21 +991,21 @@ class UserInterface:
 
         self.ask_input()
 
-    def provide_information(self, date, prefix=None):
+    def provide_information(self, date, prefix=None, colored=True):
         date_type = self.assigner.get_date_type(date)
         day_letter = self.assigner.get_day_letter(date)
         day_off_reason = self.assigner.get_day_off_reason(date)
         
-        prefix = (("That day is " if isinstance(date, list) == False else "") if prefix == None else prefix) + "&r"
+        prefix = (("That day is " if isinstance(date, list) == False else "") if prefix == None else prefix) + ("&r" if colored==True else "")
         
         if not day_letter == None:
-            return prefix + ("&c" if day_letter == DayLetter.A_DAY else "&9") + DayLetter.format(day_letter)
+            return prefix + (("&c" if colored==True else "") if day_letter == DayLetter.A_DAY else ("&9" if colored==True else "")) + DayLetter.format(day_letter)
         elif not day_off_reason == None:
-            return prefix + "&e" + day_off_reason
+            return prefix + ("&e" if colored==True else "") + day_off_reason
         if date_type == DateType.OUT_OF_SCOPE:
-            return prefix + "&4not in this school year"
+            return prefix + ("&4" if colored==True else "") + "not in this school year"
         else:
-            return prefix + "&2" + DateType.format(date_type)
+            return prefix + ("&2" if colored==True else "") + DateType.format(date_type)
         raise RuntimeError("Information was not handled nor provided correctly to self.provide_information")
 
     def print_information(self, inputted_date, list_element=False):
@@ -1022,6 +1060,8 @@ if __name__ == "__main__":
 
         ui = UserInterface(assigner, commands, updater)
     except Exception as err:
+        print(" ")
+        print(traceback.format_exc())
         print("A fatal exception has occurred. The program will exit momentary.")
         print("Found error that may be related: " + str(err))
 
