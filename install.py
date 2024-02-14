@@ -3,12 +3,13 @@
 # tqdm
 import os
 import sys
+import subprocess
 import importlib
 import traceback
 import json
 import time as threadcontrol
 
-VERSION = "0.2i-020124"
+VERSION = "0.3i-021424"
 
 def cmd(command):
     if is_external():
@@ -101,10 +102,60 @@ def ask_dependency(name, import_name, desc):
         return
     printF(" ")
 
-if __name__ == "__main__":
+def script_install():
+    import requests # should be installed now
     try:
+        download = requests.get("https://update.ab.download.noahf.net/").text
+        json_data = json.loads(request)
+    except Exception as err:
+        printF("&8(failed to retrieve list of scripts, ignorantly assuming files and folders)")
+        json_data = {
+            "tree": [
+                {"path": "ABDayDetector.py"}
+            ]
+        }
+
+    FOLDER = "https://raw.githubusercontent.com/nfranks8036/ABDayDetectorScript/main/src/"
+
+    tree = json_data["tree"]
+    main = None
+    for file in tree:
+        url = FOLDER + str(file["path"])
+        path = str(file["path"])
+
+        download = requests.get(url).text
+        with open(path, "w") as file:
+            file.write(download)
+            if path == "ABDayDetector.py":
+                main = path
+
+    if main == None:
+        raise RuntimeError("Failed to find main file, maybe it's not the same string (by literal)?")
+
+    printF(" ")
+    printF("&aâœ“ &fDownloaded main script.")
+    threadcontrol.sleep(0.5)
+    printF(" ")
+    printF("&6COMPLETE!")
+    printF("&e| &fYou're done! You just finished installing the correct files and dependencies.")
+    printF("&e| &fIf you ever want to run the script, double-click on \"&bABDayDetector&f\".")
+    printF("&e| &fFollow the directions when you open that script to utilize it!")
+    printF(" ")
+    printF("&7&oPress any key to open the main script and close this one! (or, you could just close this tab)")
+    os.remove(__file__)
+    cmd("pause >NUL")
+
+    os.startfile(main)
+    exit()
+
+class Installer():
+    def __init__(self):
         cmd("title School Day Detector Installer")
 
+        if len(sys.argv) > 1 and sys.argv[1] == "--skip-dependencies":
+            script_install()
+            complete()
+            return
         printF("&6SCHOOL DAY DETECTOR: &b&lINSTALLER &8v" + VERSION)
         printF("&e| &fWelcome to the the school day detector INSTALLER.")
         printF(" ")
@@ -121,58 +172,25 @@ if __name__ == "__main__":
         printF("&2Great! &fLet's see what files are needed to install.", )
         printF(" ")
         ask_dependency("requests", "requests", "We use this library to contact the Roanoke County Public Schools website for the data it contains about what school days the school has off, which is crucial in determining A/B day. It is also used to check for script updates.")
-        printF(" ")
         ask_dependency("taqaddum", "tqdm", "We use this library to display a progress bar whenever a piece of data is downloading, such as when the script retrieves it's A/B day schedule from the RCPS website at www.rcps.us.")
         printF(" ")
         printF("&bSCRIPT INSTALLATION:")
         printF("&fNow, we need your permission to install the actual script.")
         printF("&fThis will delete this install.py file and let you use the main package.")
         printF("&7&o(Denying this will prevent the actual script from installing)")
-        printF(" ")
+        printF(" ")   
         ask_input("&fWould you like to install the main script (&aY&f/&cN&f)? ", file_denied)
-
-        import requests # should be installed now
-        try:
-            download = requests.get("https://update.ab.download.noahf.net/").text
-            json_data = json.loads(request)
-        except Exception as err:
-            printF("&8(failed to retrieve actual script, ignorantly assuming files and folders)")
-            json_data = {
-                "tree": [
-                    {"path": "ABDayDetector.py"}
-                ]
-            }
-
-        FOLDER = "https://raw.githubusercontent.com/nfranks8036/ABDayDetectorScript/main/src/"
-
-        tree = json_data["tree"]
-        main = None
-        for file in tree:
-            url = FOLDER + str(file["path"])
-            path = str(file["path"])
-
-            download = requests.get(url).text
-            with open(path, "w") as file:
-                file.write(download)
-                if path == "ABDayDetector.py":
-                    main = path
-
-        if main == None:
-            raise RuntimeError("Failed to find main file, maybe it's not the same string (by literal)?")
-
-        printF("&aâœ“ &fDownloaded main script.")
         printF(" ")
-        printF("&6BOOM!")
-        printF("&e| &fYou're done! You just finished installing the correct files and dependencies.")
-        printF("&e| &fIf you ever want to run the script, double-click on \"&bABDayDetector&f\".")
-        printF("&e| &fFollow the directions when you open that script to utilize it!")
-        printF(" ")
-        printF("&7&oPress any key to open the main script and close this one! (or, you could just close this tab)")
-        os.remove(__file__)
-        cmd("pause >NUL")
-
-        os.startfile(main)
+        printF("&aGreat! &7&oThe script will begin installing in a few seconds...")
+        printF("&c&lDO NOT &fclose the window.")
+        threadcontrol.sleep(3)
+        subprocess.Popen([r'python', 'install.py', '--skip-dependencies'])
         exit()
+
+if __name__ == "__main__":
+    try:
+        os.system("cls >NUL")
+        Installer()
     except Exception as err:
         printF(" ")
         printF("&cERROR TRACEBACK:")
