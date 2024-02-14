@@ -40,10 +40,11 @@ class Log:
 class Updater:
 
     # this is the version the program thinks it is, please do not change
-    VERSION = "1.1.1"
+    VERSION = "1.1.2"
 
     DOWNLOAD_URL = "https://update.ab.download.noahf.net/"
-    CHECK_URL = "https://raw.githubusercontent.com/nfranks8036/ABDayDetectorScript/main/version-history.json"
+    CHECK_URL = "https://update.ab.check.noahf.net/"
+    FOLDER = "https://raw.githubusercontent.com/nfranks8036/ABDayDetectorScript/main/src/"
     DEV_BUILD = False # True will prevent users from downloading this file or you from uploading it
 
     BLOCK_SIZE = 1024
@@ -120,15 +121,18 @@ class Updater:
                         ]
                     }
 
-            FOLDER = "https://raw.githubusercontent.com/nfranks8036/ABDayDetectorScript/main/src/"
-            Log.text("Folder of all files set to " + str(FOLDER) + ", lookings to download " + str(len(json_data["tree"])) + " file(s)")
+            Log.text("Folder of all files set to " + str(self.FOLDER) + ", lookings to download " + str(len(json_data["tree"])) + " file(s)")
 
             Log.text("Executing ~" + str(len(json_data["tree"])) + " download(s)...")
             Log.text(" ")
             tree = json_data["tree"]
             file_urls = []
             for file in tree:
-                self.download(FOLDER + str(file["path"]), os.path.basename(__file__))
+                self.download(self.FOLDER + str(file["path"]), os.path.basename(__file__))
+        except KeyboardInterrupt as err:
+            Log.text("[  ---------       (MANUAL)        ---------  ]")
+            Log.text("[  --------- END CHECK FOR UPDATES ---------  ]")
+            raise err
         except Exception as err:
             Log.text(traceback.format_exc().strip())
             Log.text("DOWNLOADER FAILED: " + str(type(err)) + " " + str(err))
@@ -147,16 +151,17 @@ class Updater:
                 "currentVersion": self.VERSION}
             ))
 
+            # delta_version = 0 means the program is up-to-date
+            # delta_version > 0 means the program is out-of-date by x versions
+            # delta_version = -1 means the program can't find how far out-of-date it is (could be a dev build)
+            self.delta_version = 0
+
             check = requests.get(self.CHECK_URL)
             check_content = check.text
             Log.text("Found " + str(len(check_content.split("\n"))) + " lines (" + check.url + ")")
 
             latest_data = json.loads(check_content)
 
-            # delta_version = 0 means the program is up-to-date
-            # delta_version > 0 means the program is out-of-date by x versions
-            # delta_version = -1 means the program can't find how far out-of-date it is (could be a dev build)
-            self.delta_version = 0
             self.latest_version = latest_data["latest"]
             Log.text("Found latest data: " + str(latest_data))
             if not latest_data["latest"] == self.VERSION:
@@ -180,6 +185,7 @@ class Updater:
 
         except Exception as err:
             self.error = err
+            self.delta_version = -1
             Log.text(traceback.format_exc().strip())
             Log.text("Fatal exception (check for updates)")
             Log.text("Found exception " + str(type(err)) + ": " + str(err))
@@ -509,7 +515,7 @@ class Commands:
             "data": data,
             "func": function
             }
-        print("Registered command: " + str(data))
+        Log.text("Registered command: " + str(data))
 
     # evaluates a given input from the command line, usually barely touched by the program already
     def evaluate(self, ui, inputted) -> bool:
@@ -539,7 +545,7 @@ class Commands:
 
         self.register(
             {"name": "help",
-             "aliases": ["?", "/help"],
+             "aliases": ["?", "/help", "dateformats", "dateformat", "commands", "command", "cmd", "cmds", "formats", "format", "dates", "date"],
              "desc": "Displays this help menu"},
             self.help
         )
@@ -579,6 +585,12 @@ class Commands:
              "desc": "Shows all days off and breaks for the current school year."},
             self.show_days_off
         )
+        self.register(
+            {"name": "contact",
+             "aliases": ["contactme", "bug", "issue", "bugs", "issues", "needhelp"],
+             "desc": "Shows you the contact information for Noah F. Use this if you need any help or find any issues."},
+            self.contact
+        )
 
     def help(self, ui, args):
         printF(" ")
@@ -598,6 +610,17 @@ class Commands:
             for key in character_map.keys():
                 date_format = date_format.replace(key, character_map[key])
             printF("&b" + str(date_format) + "&f: " + datetime.now().strftime(raw_format))
+        printF(" ")
+        return True
+
+    def contact(self, ui, args):
+        printF(" ")
+        printF("&eFind all my social media accounts and my non-school email at")
+        printF("&bwww.noahf.net")
+        if as_epoch(datetime.now()) < as_epoch(ui.assigner.year_end):
+            printF(" ")
+            printF("&eIf you need my school email (which will disappear in Summer of 2024), here it is:")
+            printF("&bnfranks8036@student.rcps.us")
         printF(" ")
         return True
 
@@ -644,7 +667,7 @@ class Commands:
             printF(" ")
         except Exception as err:
             printF("&cFailed to upgrade this script, error: &8" + str(err) + " &cof type &8" + str(type(err)))
-            printF("&cPlease check for updates manually at &b" + Updater.CHECK_URL)
+            printF("&cPlease check for updates manually at &b" + Constants.GITHUB_LINK)
             printF("&cAlternately, contact Noah for help at &bwww.noahf.net")
             printF(" ")
         return True
@@ -750,9 +773,9 @@ class Commands:
 class UserInterface:
     # separators are how exactly you can specify multiple dates
     # for example:
-    # January 1-31 2024 is just as valid as January 1->31 2024
-    # January 1 2024 - Februrary 1 2024 will be just as valid as January 1 2024 -> February 1 2024
-    SEPARATORS = ["-", "->", "/", "//", "|"]
+    # January 1-31 2024 is just as valid as January 1>31 2024
+    # January 1 2024 - Februrary 1 2024 will be just as valid as January 1 2024 > February 1 2024
+    SEPARATORS = ["-", "/", "//", ">", "to", " to ", "|"]
     
     def is_external():
         # detects if the user is running in IDLE or not (used for color support and whatnot)
@@ -819,12 +842,12 @@ class UserInterface:
         printF(" ")
         printF("&6WHAT?")
         printF("&e| &fThis program lets you figure out if a day is going to be an A day or a B day.")
-        printF("&e| &fIt also lets you figure out WHY a day is off.")
-        printF("&e| &fNOTE: It can change at anytime due to snow-days, but simply re-run the program and")
-        printF("&e| &f      it should update with snow days automatically.")
+        printF("&e| &fNOTE: The program will update its A/B day calculator with unexpected days off (e.g., snow) if they occur.")
         printF(" ")
         printF("&6HOW?")
         printF("&e| &fEnter a date below and the program will give you all information about it.")
+        printF("&e| &fType &bhelp &fto view all the commands you can utilize.")
+        printF("&e| &fType &bcontact &fif you need to contact Noah if you find any bugs or issues.")
         printF("&e|  ")
         printF("&e|   &r&6A SINGLE DATE:")
         printF("&e|   &r&5| &fThe format should be: &aMONTH DAY YEAR")
@@ -836,6 +859,8 @@ class UserInterface:
         printF(" ")
         if self.updater.delta_version > 0: # user needs to update teehee
             printF("&6YOU ARE OUTDATED!")
+            if self.updater.delta_version != -1:
+                printF(f"&e| &eYou are {str(self.updater.delta_version)} version(s) out of date!")
             printF("&e| &fCheck what version you're using by typing \"&bversion&f\"")
             printF("&e| &fUpgrade your script automatically by typing \"&bupgrade&f\" &c&l(RECOMMENDED ASAP)")
             printF(" ")
@@ -953,7 +978,12 @@ class UserInterface:
             return err
 
     def ask_input(self, forced: str=None):
-        inputted = input(UserInterface.color_full("&fEnter date or command: &b")) if forced == None else forced
+        try:
+            inputted = input(UserInterface.color_full("&fEnter date or command: &b")) if forced == None else forced
+        except KeyboardInterrupt as err:
+            raise err
+        except EOFError:
+            inputted = ""
         if inputted.strip() == "":
             self.ask_input()
             return
@@ -1052,16 +1082,41 @@ if __name__ == "__main__":
         
         Log.text("Enjoy the program, made with <3 by Noah Franks")
         Log.text("| -> MAIN WEBSITE: www.noahf.net")
-        Log.text("| -> WEBSITE COUNTERPART: www.noahf.net/school/days") # currently not operational as of Feb 1 2024
         Log.text("| -> LET'S GO TERRIERS!") # WBHS!!!!!!!!!
+        Log.text("| -> LET'S GO HOKIES!") # VT!!!!!!!!
         Log.text("| -> CREATED IN JAN 2024") # modified in the following months
 
         Log.text("Instantiating UserInterface...")
 
         ui = UserInterface(assigner, commands, updater)
+    except KeyboardInterrupt as err:
+        try:
+            print(" ")
+            print(" ")
+            print("You pressed CTRL + C outside of an update, this will close the program...")
+            print("Press CTLR + C again to restart")
+            threadcontrol.sleep(1)
+            print("Closing in 3s...")
+            threadcontrol.sleep(1)
+            print("Closing in 2s...")
+            threadcontrol.sleep(1)
+            print("Closing in 1s...")
+            threadcontrol.sleep(1)
+            print("Exiting program")
+            threadcontrol.sleep(0.5)
+            exit()
+        except KeyboardInterrupt as err:
+            print("Restarting...")
+            threadcontrol.sleep(0.1)
+            os.startfile(__file__)
+            exit()
+            print("You may close this terminal window!")
     except Exception as err:
         print(" ")
-        print(traceback.format_exc())
+        try:
+            print(traceback.format_exc())
+        except Exception as err:
+            print("(No traceback: " + err)
         print("A fatal exception has occurred. The program will exit momentary.")
         print("Found error that may be related: " + str(err))
 
