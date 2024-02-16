@@ -40,7 +40,7 @@ class Log:
 class Updater:
 
     # this is the version the program thinks it is, please do not change
-    VERSION = "1.1.2"
+    VERSION = "1.1.3"
 
     DOWNLOAD_URL = "https://update.ab.download.noahf.net/"
     CHECK_URL = "https://update.ab.check.noahf.net/"
@@ -248,7 +248,7 @@ class RCPSWebsiteReader:
 
         try:
             self.url = DatesFinder().get_url()
-            Log.text("Website reader found neat URL: " + str(self.url))
+            Log.text("Website reader found provided URL: " + str(self.url))
             if self.url == None:
                 raise RuntimeError("URL not defined nor found on RCPS website")
             
@@ -1047,8 +1047,9 @@ class UserInterface:
             if not isinstance(date, type(datetime.today())):
                 items.append(["&cInvalid date detected: ", "&8" + str(date)])
                 continue
+            day = Constants.DAYS[date.weekday()].upper()
             items.append(
-                [("&6&n" + Constants.MONTHS[date.month - 1].upper() + " " + str(date.day) + self.assigner.get_ordinal_ending(date.day).upper() + ", " + str(date.year)),
+                [("&6&n" + (day[0:3] if list_element == True else day) + ", " + (Constants.MONTHS[date.month - 1].upper()[0:3] if list_element == True else Constants.MONTHS[date.month - 1].upper()) + " " + str(date.day) + self.assigner.get_ordinal_ending(date.day).upper() + ", " + str(date.year)),
                 (self.provide_information(date)),
                  " "]
             )
@@ -1063,6 +1064,7 @@ class UserInterface:
 
 # program start
 if __name__ == "__main__":
+    start = datetime.now()
     Log.text("Loading program...")
     try:
         Log.text("Date and time: " + str(datetime.now()))
@@ -1085,6 +1087,7 @@ if __name__ == "__main__":
         Log.text("| -> LET'S GO TERRIERS!") # WBHS!!!!!!!!!
         Log.text("| -> LET'S GO HOKIES!") # VT!!!!!!!!
         Log.text("| -> CREATED IN JAN 2024") # modified in the following months
+        Log.text(f"| -> TOOK {str(datetime.now() - start)} TO START")
 
         Log.text("Instantiating UserInterface...")
 
@@ -1093,20 +1096,20 @@ if __name__ == "__main__":
         try:
             print(" ")
             print(" ")
-            print("You pressed CTRL + C outside of an update, this will close the program...")
-            print("Press CTLR + C again to restart")
+            printF("&cYou pressed &bCTRL + C &coutside of an update, this will close the program...")
+            printF("&7&oPress CTLR + C again to restart")
             threadcontrol.sleep(1)
-            print("Closing in 3s...")
+            printF("&e&oClosing in &c3s&e...")
             threadcontrol.sleep(1)
-            print("Closing in 2s...")
+            printF("&e&oClosing in &c2s&e...")
             threadcontrol.sleep(1)
-            print("Closing in 1s...")
+            printF("&e&oClosing in &c1s&e...")
             threadcontrol.sleep(1)
-            print("Exiting program")
+            printF("&a&oExiting program")
             threadcontrol.sleep(0.5)
             exit()
         except KeyboardInterrupt as err:
-            print("Restarting...")
+            printF("&a&oRestarting...")
             threadcontrol.sleep(0.1)
             os.startfile(__file__)
             exit()
