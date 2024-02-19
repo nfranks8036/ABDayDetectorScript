@@ -9,7 +9,7 @@ import traceback
 import json
 import time as threadcontrol
 
-VERSION = "0.3i-021424"
+VERSION = "0.4i-02182024"
 
 def cmd(command):
     if is_external():
@@ -71,7 +71,7 @@ def try_import(name, import_name, import_string):
     try:
         importlib.import_module(import_name)
         printF(" ")
-        printF("&aâœ“ &fModule dependency satisfied: " + str(name) + import_string)
+        printF("&a✓ &fModule dependency satisfied: " + str(name) + import_string)
         return True
     except ModuleNotFoundError:
         return False
@@ -93,7 +93,7 @@ def ask_dependency(name, import_name, desc):
     printF(" ")
     printF("&7&oDownloading and installing " + str(name) + import_name + "...")
     printF("&7&oThis may take a moment...&f")
-    os.system("python -m pip install " + str(real_name) + " >NUL")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", str(real_name)])
     if try_import(name, real_name, import_name) == False:
         printF("&cFailed to install dependency: " + str(name) + import_name)
         printF("&cContact Noah at &bwww.noahf.net")
@@ -106,9 +106,9 @@ def script_install():
     import requests # should be installed now
     try:
         download = requests.get("https://update.ab.download.noahf.net/").text
-        json_data = json.loads(request)
+        json_data = json.loads(download)
     except Exception as err:
-        printF("&8(failed to retrieve list of scripts, ignorantly assuming files and folders)")
+        printF("&8(failed to retrieve list of scripts, ignorantly assuming files and folders: " + str(err) + ")")
         json_data = {
             "tree": [
                 {"path": "ABDayDetector.py"}
@@ -133,7 +133,7 @@ def script_install():
         raise RuntimeError("Failed to find main file, maybe it's not the same string (by literal)?")
 
     printF(" ")
-    printF("&aâœ“ &fDownloaded main script.")
+    printF("&a✓ &fDownloaded main script.")
     threadcontrol.sleep(0.5)
     printF(" ")
     printF("&6COMPLETE!")
@@ -183,7 +183,7 @@ class Installer():
         printF(" ")
         printF("&aGreat! &7&oThe script will begin installing in a few seconds...")
         printF("&c&lDO NOT &fclose the window.")
-        threadcontrol.sleep(3)
+        threadcontrol.sleep(1)
         subprocess.Popen([r'python', 'install.py', '--skip-dependencies'])
         exit()
 
