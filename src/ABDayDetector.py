@@ -1,12 +1,14 @@
-import requests
 from tqdm import tqdm
+from datetime import datetime, timedelta, date, time
+from collections import OrderedDict
+import requests
 import traceback
 import os
 import sys
 import math
 import json
+import re
 import time as threadcontrol
-from datetime import datetime, timedelta, date, time
 
 def cmd(command):
     # if we're using IDLE to see sys.out, then we probably don't want to execute commands
@@ -40,7 +42,7 @@ class Log:
 class Updater:
 
     # this is the version the program thinks it is, please do not change
-    VERSION = "1.1.3"
+    VERSION = "1.2"
 
     DOWNLOAD_URL = "https://update.ab.download.noahf.net/"
     CHECK_URL = "https://update.ab.check.noahf.net/"
@@ -183,6 +185,20 @@ class Updater:
             elif self.delta_version > 0:
                 Log.text(f"Final call: {str(self.delta_version)} versions behind")
 
+        except requests.exceptions.ConnectionError as err:
+            Log.text(traceback.format_exc().strip())
+            Log.text(" ")
+            Log.text(" ")
+            Log.text(" ")
+            Log.text("*************************************************************************")
+            Log.text("**            Failed to retrieve data from the internet.               **")
+            Log.text("**                Are you connected to the internet?                   **")
+            Log.text("** You must be connected to the internet in order to use this program! **")
+            Log.text("**                                                                     **")
+            Log.text("**                     (press enter to exit)                           **")
+            Log.text("*************************************************************************")
+            os.system("pause >NUL")
+            exit()
         except Exception as err:
             self.error = err
             self.delta_version = -1
@@ -574,6 +590,12 @@ class Commands:
             self.restart
         )
         self.register(
+            {"name": "exit",
+             "aliases": ["stop", "end"],
+             "desc": "Closes the program window."},
+            self.exit
+        )
+        self.register(
             {"name": "today",
              "aliases": [],
              "desc": "Checks the A or B day status of the current day."},
@@ -602,11 +624,7 @@ class Commands:
         printF("&6AVAILABLE DATE FORMATS:")
         for date_format in ui.date_formats:
             raw_format = date_format
-            character_map = {
-                "%B": "MMMMM",
-                "%b": "MMM",
-                "%#d": "d",
-                "%Y": "YYYY"}
+            character_map = ui.replace_in_date
             for key in character_map.keys():
                 date_format = date_format.replace(key, character_map[key])
             printF("&b" + str(date_format) + "&f: " + datetime.now().strftime(raw_format))
@@ -629,6 +647,14 @@ class Commands:
         printF(" ")
         printF("&2Restarting script, please wait...")
         os.startfile(__file__)
+        exit()
+        printF("&7&oYou may close this terminal window.")
+        return True
+
+    def exit(self, ui, args):
+        printF(" ")
+        printF(" ")
+        printF("&cExiting script, please wait...")
         exit()
         printF("&7&oYou may close this terminal window.")
         return True
@@ -688,22 +714,32 @@ class Commands:
     def version(self, ui, args):
         printF(" ")
 
+        version = Updater.VERSION
+        latest = str(ui.updater.latest_version)
         delta = ui.updater.delta_version
+        for index, arg in enumerate(args):
+            if args[index - 1] == "--version":
+                version = arg
+            elif args[index - 1] == "--delta":
+                delta = int(arg)
+            elif args[index - 1] == "--latest":
+                latest = arg
+        
         if len(args) > 0 and "--detail" in args[0]:
-            printF(f"Found version: {Updater.VERSION}")
-            printF(f"Latest version: {str(ui.updater.latest_version)}")
+            printF(f"Found version: {version}")
+            printF(f"Latest version: {latest}")
             printF(f"Delta: {str(delta)}")
             printF(f"Dev build: {str(Updater.DEV_BUILD).upper()}")
             printF(" ")
             return True
 
-        printF(f"&fThis script is using ABDayDetector version {Updater.VERSION} (Python {str(sys.version).split(' ')[0]}) (Is dev build? {str(Updater.DEV_BUILD).upper()})")
-        if ui.updater.delta_version == 0:
+        printF(f"&fThis script is using ABDayDetector version {version} (Python {str(sys.version).split(' ')[0]}) (Is dev build? {str(Updater.DEV_BUILD).upper()})")
+        if delta == 0:
             printF("&aYou are on the latest version!")
-        elif ui.updater.delta_version > 0:
+        elif delta > 0:
             printF(f"&eYou are {str(delta)} version{'' if delta == 1 else 's'} behind!")
             printF('&eUpdate by typing "&bupgrade&e"!')
-        elif ui.updater.delta_version == -1:
+        elif delta == -1:
             printF("&cError checking version status.")
             printF(f"&f&oCheck for updates manually at &b&n{Updater.CHECK_URL}")
 
@@ -775,7 +811,28 @@ class UserInterface:
     # for example:
     # January 1-31 2024 is just as valid as January 1>31 2024
     # January 1 2024 - Februrary 1 2024 will be just as valid as January 1 2024 > February 1 2024
-    SEPARATORS = ["-", "/", "//", ">", "to", " to ", "|"]
+    SEPARATORS = ["-", "/", "//", ">", "to", "|"]
+    REGEX_SEPARATORS = "|".join(SEPARATORS)
+
+    DATE_FORMATS = [
+            "%B %d %Y",
+            "%b %d %Y",
+            "%B %d, %Y",
+            "%b %d, %Y",
+            "%m-%d-%Y",
+            "%m-%d-%y",
+            "%m/%d/%y",
+            "%m/%d/%Y"
+        ]
+    
+    DATES_CHARACTER_MAP = { # "python date format": ["java simple date time", "regex"]
+                "%B": ["MMMMM", "[A-Za-z]{3,"],
+                "%b": ["MMM", "[A-Za-z]{3}"],
+                "%d": ["d", "\d{1,2}"],
+                "%Y": ["YYYY", "\d{4}"],
+                "%y": ["YY", "\d{2}"],
+                "%m": ["MM", "\d{1,2}"]
+        }
     
     def is_external():
         # detects if the user is running in IDLE or not (used for color support and whatnot)
@@ -820,13 +877,6 @@ class UserInterface:
         self.assigner = ab_date_assigner
         self.commands = commands
         self.updater = updater
-
-        self.date_formats = [
-            "%B %#d %Y",
-            "%b %#d %Y",
-            "%B %#d, %Y",
-            "%b %#d, %Y"
-        ]
 
         now = datetime.now()
 
@@ -906,74 +956,117 @@ class UserInterface:
     # Jan 17, 2024 - Jan 18, 2024
     # Jan 17, 2024-Jan 18, 2024
 
-    # parse a specific date, will return a list if multiple (Jan 17-18 2024 for example)
-    # or a single date if not multiple
-    def parse(self, user_input, format_type):
-        tokens = user_input.split(" ") 
-        if len(tokens) == 3:
-            # example input: Jan 1-31 2024
-            month = tokens[0] # the month of the example input is the first element
-            year = tokens[2] # the year of the example input is the second element
-            returned = []
-            for separator in UserInterface.SEPARATORS: # check all legal separators
-                dates = tokens[1].split(separator) # 1-31 can be split into [1, 31]
-                if not len(dates) == 2:
-                    continue
-                minimum = min(int(dates[0]), int(dates[1]))
-                maximum = max(int(dates[0]), int(dates[1]))
+    def date(self, string, date_format):
+        return datetime.strptime(string, date_format)
 
-                for i in range(minimum, maximum+1): # add all legal dates between the two min and max inputs
-                    returned.append(datetime.strptime(f"{month} {str(i)} {year}", format_type))
+    def search_regex(self, input_text, pattern):
+        return list(self.search_regex_complex(input_text, pattern).values())
 
-            if len(returned) != 0:
-                return returned
+    def search_regex_complex(self, input_text, pattern):
+        returned = {}
+        for item in re.compile(pattern).finditer(input_text):
+            returned[item.span()[0]] = item.group(0)
+        return returned
 
-                
-                
-        return datetime.strptime(user_input, format_type)
-
-    # try a specifc input with a random format_tpye
-    def try_input(self, previous_date, user_input, format_type):
-        if not isinstance(previous_date, Exception) and not isinstance(previous_date, list) and previous_date != None:
-            return previous_date
-        
+    def is_date(self, string, date_format):
         try:
-            new_date = None
+            self.date(string, date_format)
+            return True
+        except ValueError:
+            return False
 
-            # might rewrite this one day whenever it starts pissing me off
-            # cuz not even i really know what's happening here and can't explain some of it 
-            if not isinstance(previous_date, list) and True == False:
-                new_date = []
-                for separator in UserInterface.SEPARATORS:
-                    if not separator in str(user_input):
-                        continue
+    # returns a list of indices of where dates of a certain format are located
+    def find_dates(self, user_input, date_format, day_separators=None):
+        try:
+            returned = []
+            original_format = date_format
+            char_map = UserInterface.DATES_CHARACTER_MAP # for ease of access reasons
+            for character in char_map: # make date format in a regular expression
+                regex = char_map[character][1]
+                if day_separators is not None and "d" in character:
+                    for separator in day_separators:
+                        date_format = date_format.replace(character, regex + separator + regex)
+                date_format = date_format.replace(character, regex)
 
-                    split_at_space = user_input.split(" ")
-                    if len(split_at_space) < 4:
-                        continue
+            dates_raw = self.search_regex(user_input, date_format)
 
-                    split_at_separator = user_input.split(separator)
-                    for item in split_at_separator:
-                        new_date.append(item)
-            
-            if isinstance(previous_date, list) or not new_date == None:
-                new_list = []
-                for date in previous_date if new_date == None else new_date:
-                    if isinstance(date, str):
-                        try:
-                            date = self.parse(user_input, format_type)
-                        except Exception as err:
-                            pass # ignore because we'll just re-set it to a string
+            if len(dates_raw) == 0 and day_separators == None: # old method of Jan 1-31 2024
+                dates_raw = self.find_dates(user_input, original_format, day_separators=[separator for separator in UserInterface.SEPARATORS if separator in user_input])
 
-                    if isinstance(date, list):
-                        for item in date:
-                            new_list.append(item)
-                    else:
-                        new_list.append(date)
+            if len(dates_raw) == 0:
+                return []
 
-                return new_list
+            dates_and_separators = self.search_regex_complex(user_input, UserInterface.REGEX_SEPARATORS + "|" + date_format)
+            next_date, separator, previous_date = None, False, None
+            for index, key in enumerate(dates_and_separators):
+                match = dates_and_separators.get(key)
+                if match not in UserInterface.SEPARATORS:
+                    if next_date is None and self.is_date(match, original_format):
+                        next_date = self.date(match, original_format)
+                    elif previous_date is None and separator == True and self.is_date(match, original_format):
+                        previous_date = self.date(match, original_format)
+                        
+                        delta = (max(previous_date, next_date) - min(previous_date, next_date)).days
+                        
+                        for i in range(0, delta):
+                            dates_raw.append(next_date)
+                            next_date = next_date + timedelta(days=1)
 
-            return self.parse(user_input, format_type)
+                        next_date, separator, previous_date = None, False, None
+                    continue
+
+                separator = True
+
+
+            dates = []
+            for index, date in enumerate(dates_raw):
+                if day_separators is None:
+                    dates.append(self.date(date, original_format) if type(date) is str else date)
+                    continue
+
+                for separator in day_separators:
+                    located_regex = self.search_regex(user_input, "\d{1,2}" + separator + "\d{1,2}")[0]                
+                    days = [int(i) for i in located_regex.split(separator)]
+
+                date = self.date(user_input.replace(located_regex, "1"), original_format)
+
+                month = date.month
+                year = date.year
+
+                dates = dates + [datetime(year=year, month=month, day=i) for i in range(min(days), max(days) + 1)]
+
+            return dates
+        except Exception as err:
+            printF("&c" + traceback.format_exc(err))
+            return []
+
+    def finalize_and_sort_input(self, final_dates):
+        if len(final_dates) == 1:
+            return final_dates[0]
+
+        final_dates = list(set(final_dates)) # remove duplicates
+
+        dates = {}
+        for date in final_dates:
+            dates[as_epoch(date)] = date
+
+        return [dates.get(key) for key in dict(sorted(dates.items())).keys()]
+
+    def try_input(self, user_input):
+        try:
+         #   for date_format in self.date_formats:
+           #     date = self.try_input(date, inputted, date_format.
+            dates = []
+            for date_format in UserInterface.DATE_FORMATS:
+                found = self.find_dates(user_input, date_format)
+                dates = dates + found
+
+            dates = self.finalize_and_sort_input(dates)
+
+            if isinstance(dates, list) and len(dates) == 0:
+                raise ValueError("Failed to find dates from input: '" + str(user_input) + "'")
+
+            return dates
         except Exception as err:
             return err
 
@@ -984,6 +1077,7 @@ class UserInterface:
             raise err
         except EOFError:
             inputted = ""
+
         if inputted.strip() == "":
             self.ask_input()
             return
@@ -999,12 +1093,10 @@ class UserInterface:
             inputted = inputted.replace(ordinal, "")
 
         # trying different input dates as the user may have their preference
-        date = None
-        for date_format in self.date_formats:
-            date = self.try_input(date, inputted, date_format.replace("#", ""))
+        date = self.try_input(inputted)
 
         if isinstance(date, Exception) or date == None:
-            if isinstance(date, ValueError) and "does not match format" in str(date):
+            if isinstance(date, ValueError) and ("does not match format" in str(date) or "Failed to find date" in str(date)):
                 self.error("You entered an incorrect date format or command.\nTry typing \"&nhelp&r&7&o\" for help.", None)
                 return
             self.error("Standard error of type " + str(type(date)), date)
@@ -1044,9 +1136,6 @@ class UserInterface:
 
         items = []
         for date in inputted_date:
-            if not isinstance(date, type(datetime.today())):
-                items.append(["&cInvalid date detected: ", "&8" + str(date)])
-                continue
             day = Constants.DAYS[date.weekday()].upper()
             items.append(
                 [("&6&n" + (day[0:3] if list_element == True else day) + ", " + (Constants.MONTHS[date.month - 1].upper()[0:3] if list_element == True else Constants.MONTHS[date.month - 1].upper()) + " " + str(date.day) + self.assigner.get_ordinal_ending(date.day).upper() + ", " + str(date.year)),
