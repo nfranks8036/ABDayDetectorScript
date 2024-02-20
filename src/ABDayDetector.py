@@ -7,6 +7,7 @@ import os
 import sys
 import math
 import json
+import subprocess
 import re
 import time as threadcontrol
 
@@ -42,7 +43,7 @@ class Log:
 class Updater:
 
     # this is the version the program thinks it is, please do not change
-    VERSION = "1.2"
+    VERSION = "1.2.1"
 
     DOWNLOAD_URL = "https://update.ab.download.noahf.net/"
     CHECK_URL = "https://update.ab.check.noahf.net/"
@@ -145,6 +146,16 @@ class Updater:
     def __init__(self):
         Log.text("[  --------- BEGIN CHECK FOR UPDATES ---------  ]")
         try:
+            self.force_latest = None
+            if len(sys.argv) > 1:
+                Log.text("FOUND SYSTEM ARGUMENTS: " + str(sys.argv))
+                for index, arg in enumerate(sys.argv):
+                    if sys.argv[index - 1] == "--version":
+                        Updater.VERSION = arg
+                    elif sys.argv[index - 1] == "--latest":
+                        self.force_latest = arg
+                    elif sys.argv[index - 1] == "--dev-build":
+                        Updater.DEV_BUILD = bool(arg)
 
             Log.text("Initializing updater...")
             Log.text("Found environment: " + str({
@@ -163,6 +174,9 @@ class Updater:
             Log.text("Found " + str(len(check_content.split("\n"))) + " lines (" + check.url + ")")
 
             latest_data = json.loads(check_content)
+
+            if self.force_latest is not None:
+                latest_data["latest"] = self.force_latest
 
             self.latest_version = latest_data["latest"]
             Log.text("Found latest data: " + str(latest_data))
@@ -608,6 +622,12 @@ class Commands:
             self.show_days_off
         )
         self.register(
+            {"name": "share",
+             "aliases": [],
+             "desc": "Gives a link to share if you would like to distribute this program."},
+            self.share
+        )
+        self.register(
             {"name": "contact",
              "aliases": ["contactme", "bug", "issue", "bugs", "issues", "needhelp"],
              "desc": "Shows you the contact information for Noah F. Use this if you need any help or find any issues."},
@@ -622,22 +642,22 @@ class Commands:
             printF("&b" + str(command["data"]["name"]) + "&f: " + str(command["data"]["desc"]))
         printF(" ")
         printF("&6AVAILABLE DATE FORMATS:")
-        for date_format in ui.date_formats:
+        for date_format in UserInterface.DATE_FORMATS:
             raw_format = date_format
-            character_map = ui.replace_in_date
+            character_map = UserInterface.DATES_CHARACTER_MAP
             for key in character_map.keys():
-                date_format = date_format.replace(key, character_map[key])
+                date_format = date_format.replace(key, character_map[key][0])
             printF("&b" + str(date_format) + "&f: " + datetime.now().strftime(raw_format))
         printF(" ")
         return True
 
     def contact(self, ui, args):
         printF(" ")
-        printF("&eFind all my social media accounts and my non-school email at")
+        printF("&6SOCIAL MEDIA & EMAIL:")
         printF("&bwww.noahf.net")
         if as_epoch(datetime.now()) < as_epoch(ui.assigner.year_end):
             printF(" ")
-            printF("&eIf you need my school email (which will disappear in Summer of 2024), here it is:")
+            printF("&6SCHOOL EMAIL: &7(will disappear in Summer of 2024)")
             printF("&bnfranks8036@student.rcps.us")
         printF(" ")
         return True
@@ -717,6 +737,7 @@ class Commands:
         version = Updater.VERSION
         latest = str(ui.updater.latest_version)
         delta = ui.updater.delta_version
+        dev = Updater.DEV_BUILD
         for index, arg in enumerate(args):
             if args[index - 1] == "--version":
                 version = arg
@@ -724,16 +745,23 @@ class Commands:
                 delta = int(arg)
             elif args[index - 1] == "--latest":
                 latest = arg
+            elif args[index - 1] == "--dev-build":
+                dev = bool(arg)
+            elif args[index - 1] == "--reboot-as":
+                os.system("cls")
+                subprocess.Popen([sys.executable, 'ABDayDetector.py'] + args)
+                exit()
+                return True
         
         if len(args) > 0 and "--detail" in args[0]:
             printF(f"Found version: {version}")
             printF(f"Latest version: {latest}")
             printF(f"Delta: {str(delta)}")
-            printF(f"Dev build: {str(Updater.DEV_BUILD).upper()}")
+            printF(f"Dev build: {str(dev).upper()}")
             printF(" ")
             return True
 
-        printF(f"&fThis script is using ABDayDetector version {version} (Python {str(sys.version).split(' ')[0]}) (Is dev build? {str(Updater.DEV_BUILD).upper()})")
+        printF(f"&fThis script is using ABDayDetector version {version} (Python {str(sys.version).split(' ')[0]}) (Is dev build? {str(dev).upper()})")
         if delta == 0:
             printF("&aYou are on the latest version!")
         elif delta > 0:
@@ -751,6 +779,15 @@ class Commands:
         printF("&6LOG HISTORY:")
         for index, line in enumerate(Log.get_log_history()):
             printF(f"&c[&e{str(index + 1)}&c] &7" + str(line))
+        printF(" ")
+        return True
+
+    def share(self, ui, args):
+        printF(" ")
+        printF("&6SHARE THE PROGRAM:")
+        printF("&b&n" + Constants.GITHUB_LINK)
+        printF(" ")
+        printF("&7&oSharing the program to other people helps out a lot with making others aware of this extremely useful program. Speaking as the developer of this script, it really makes me happy to see more people using this regularly as I have had no other incentive to make this other than to help others. Thank you for using this script!")
         printF(" ")
         return True
 
@@ -887,7 +924,7 @@ class UserInterface:
         Log.text(" ")
 
         cmd("cls")
-        printF(f"&6SCHOOL DAY DETECTOR &8v{Updater.VERSION}")
+        printF("&6SCHOOL DAY DETECTOR &8v" + Updater.VERSION + (" &r&c&l&n(DEVELOPER BUILD)" if Updater.DEV_BUILD == True else ""))
         printF("&e| &fWelcome to the the school day detector.")
         printF(" ")
         printF("&6WHAT?")
@@ -904,8 +941,8 @@ class UserInterface:
         printF("&e|   &r&5| &fFor example: &r&3" + now.strftime("%B " + self.number_of(now) + " %Y"))
         printF("&e|  ")
         printF("&e|   &r&6MULTIPLE DATES:")
-        printF("&e|   &r&5| &fThe format should be: &aMONTH DAY-DAY YEAR")
-        printF("&e|   &r&5| &fFor example: &r&3" + now.strftime("%B") + " 1-" + str(get_last_day_of_month(now).day) + " " + now.strftime("%Y"))
+        printF("&e|   &r&5| &fThe format should be: &aMONTH DAY YEAR - MONTH DAY YEAR")
+        printF("&e|   &r&5| &fFor example: &r&3" + now.strftime("%B") + " 1 " + now.strftime("%Y") + " - " + now.strftime("%B") + " " + str(get_last_day_of_month(now).day) + " " + now.strftime("%Y"))
         printF(" ")
         if self.updater.delta_version > 0: # user needs to update teehee
             printF("&6YOU ARE OUTDATED!")
