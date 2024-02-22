@@ -7,9 +7,10 @@ import subprocess
 import importlib
 import traceback
 import json
+import platform
 import time as threadcontrol
 
-VERSION = "0.4i-02182024"
+VERSION = "0.5i-02222024"
 
 def cmd(command):
     if is_external():
@@ -69,9 +70,11 @@ def file_denied():
 
 def try_import(name, import_name, import_string):
     try:
-        importlib.import_module(import_name)
+        result = os.system(" ".join(['python', '-c', '"import ' + import_name + '"', '>NUL']))
+        if result == 1:
+            raise ModuleNotFoundError()
         printF(" ")
-        printF("&a✓ &fModule dependency satisfied: " + str(name) + import_string)
+        printF("&aâœ“ &fModule dependency satisfied: " + str(name) + import_string)
         return True
     except ModuleNotFoundError:
         return False
@@ -133,7 +136,7 @@ def script_install():
         raise RuntimeError("Failed to find main file, maybe it's not the same string (by literal)?")
 
     printF(" ")
-    printF("&a✓ &fDownloaded main script.")
+    printF("&aâœ“ &fDownloaded main script.")
     threadcontrol.sleep(0.5)
     printF(" ")
     printF("&6COMPLETE!")
@@ -189,6 +192,12 @@ class Installer():
 
 if __name__ == "__main__":
     try:
+        if "Windows" not in platform.system():
+            print("*** This program REQUIRES Windows to run! ***")
+            print("*** If you are not using Windows, some or all functionality may be broken! ***")
+            print("*** The script will continue anyway in 10 seconds! Please wait. ***")
+            print(" ")
+            threadcontrol.sleep(10)
         os.system("cls >NUL")
         Installer()
     except Exception as err:
