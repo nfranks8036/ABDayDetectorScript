@@ -1078,7 +1078,6 @@ class UserInterface:
 
             return dates
         except Exception as err:
-            printF("&c" + traceback.format_exc(err))
             return []
 
     def finalize_and_sort_input(self, final_dates):
@@ -1109,7 +1108,6 @@ class UserInterface:
 
             return dates
         except Exception as err:
-            print(traceback.format_exc())
             return err if err.__context__ is None else err.__context__
 
     def ask_input(self, forced: str=None):
