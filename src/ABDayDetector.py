@@ -44,7 +44,7 @@ class Log:
 class Updater:
 
     # this is the version the program thinks it is, please do not change
-    VERSION = "1.3"
+    VERSION = "1.3.1"
 
     DOWNLOAD_URL = "https://update.ab.download.noahf.net/"
     CHECK_URL = "https://update.ab.check.noahf.net/"
@@ -864,7 +864,7 @@ class UserInterface:
         ]
     
     DATES_CHARACTER_MAP = { # "python date format": ["java simple date time", "regex"]
-                "%B": ["MMMMM", "[A-Za-z]{3,"],
+                "%B": ["MMMMM", "[A-Za-z]{3,}"],
                 "%b": ["MMM", "[A-Za-z]{3}"],
                 "%d": ["d", "\d{1,2}"],
                 "%Y": ["YYYY", "\d{4}"],
@@ -1059,7 +1059,10 @@ class UserInterface:
             dates = []
             for index, date in enumerate(dates_raw):
                 if day_separators is None:
-                    dates.append(self.date(date, original_format) if type(date) is str else date)
+                    try:
+                        dates.append(self.date(date, original_format) if type(date) is str else date)
+                    except ValueError as err:
+                        pass
                     continue
 
                 for separator in day_separators:
@@ -1106,7 +1109,8 @@ class UserInterface:
 
             return dates
         except Exception as err:
-            return err
+            print(traceback.format_exc())
+            return err if err.__context__ is None else err.__context__
 
     def ask_input(self, forced: str=None):
         try:
