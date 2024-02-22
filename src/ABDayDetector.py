@@ -9,6 +9,7 @@ import math
 import json
 import subprocess
 import re
+import platform
 import time as threadcontrol
 
 def cmd(command):
@@ -43,7 +44,7 @@ class Log:
 class Updater:
 
     # this is the version the program thinks it is, please do not change
-    VERSION = "1.2.1"
+    VERSION = "1.3"
 
     DOWNLOAD_URL = "https://update.ab.download.noahf.net/"
     CHECK_URL = "https://update.ab.check.noahf.net/"
@@ -63,7 +64,7 @@ class Updater:
         #file_size = int(request.headers.get('Content-Length', 0))
         file_size = len(request.content)
         all_data = []
-        with tqdm(
+        with tqdm( # tqdm for progress bar and data delay
             desc=path,
             total=file_size,
             unit='iB',
@@ -1190,10 +1191,23 @@ class UserInterface:
 
 # program start
 if __name__ == "__main__":
+    using_windows = "Windows" in platform.system()
+    if not using_windows:
+        print("** This program recommends Windows to run. **")
+        print("** Not using Windows can result in broken functality or glitches. **")
+        print("** Proceed with caution. The program will boot in 5 seconds. **")
+        print(" ")
+        threadcontrol.sleep(5)
     start = datetime.now()
     Log.text("Loading program...")
     try:
         Log.text("Date and time: " + str(datetime.now()))
+        if not using_windows:
+            text = "** USER IS NOT USING WINDOWS. SOME FUNCTIONALITY MAY BE LIMITED OR BROKEN. **"
+            
+            Log.text("*" * len(text))
+            Log.text(text)
+            Log.text("*" * len(text))
         Log.text("Main file: " + os.path.basename(__file__) + " (path: " + str(__file__) + ")")
         Log.text("Is non-IDLE? " + str(UserInterface.is_external()))
         Log.text("Loading color and title...")
