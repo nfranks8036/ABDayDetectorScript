@@ -10,7 +10,7 @@ import json
 import platform
 import time as threadcontrol
 
-VERSION = "0.5i-02222024"
+VERSION = "0.6i-02252024"
 
 def cmd(command):
     if is_external():
@@ -70,14 +70,12 @@ def file_denied():
 
 def try_import(name, import_name, import_string):
     try:
-        result = os.system(" ".join(['python', '-c', '"import ' + import_name + '"', '>NUL']))
+        result = subprocess.run([sys.executable, '-c', 'import ' + import_name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode
         if result == 1:
-            raise ModuleNotFoundError()
+            return False
         printF(" ")
-        printF("&aâœ“ &fModule dependency satisfied: " + str(name) + import_string)
+        printF("&a✓ &fModule dependency satisfied: " + str(name) + import_string)
         return True
-    except ModuleNotFoundError:
-        return False
     except Exception as err:
         raise err
 
@@ -136,7 +134,7 @@ def script_install():
         raise RuntimeError("Failed to find main file, maybe it's not the same string (by literal)?")
 
     printF(" ")
-    printF("&aâœ“ &fDownloaded main script.")
+    printF("&a✓ &fDownloaded main script.")
     threadcontrol.sleep(0.5)
     printF(" ")
     printF("&6COMPLETE!")
