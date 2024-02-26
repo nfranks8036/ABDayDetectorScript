@@ -34,7 +34,12 @@ class Log:
     
     @staticmethod
     def text(string: str):
-        print(string)
+        if "--line-log" not in sys.argv and not (len(sys.argv) > 1 and "--minimal" in sys.argv):
+            print(string)
+
+        if len(sys.argv) > 1 and "--line-log" in sys.argv:
+            columns = os.get_terminal_size()[0]
+            print(string[0:(columns - 5)] + (" " * (columns - len(string))), end="\r")
         Log.log_history.append(string)
 
     def get_log_history():
@@ -44,7 +49,7 @@ class Log:
 class Updater:
 
     # this is the version the program thinks it is, please do not change
-    VERSION = "1.3.1"
+    VERSION = "1.3.2"
 
     DOWNLOAD_URL = "https://update.ab.download.noahf.net/"
     CHECK_URL = "https://update.ab.check.noahf.net/"
@@ -666,16 +671,25 @@ class Commands:
 
     def restart(self, ui, args):
         printF(" ")
-        printF(" ")
-        printF("&2Restarting script, please wait...")
-        internal = False
+        internal, refresh = False, False
         for arg in args:
             if "--internal" in arg:
                 internal = True
+            if "--refresh" in arg or "-rf" in arg:
+                refresh = True
+                args.append("--internal")
+                args.append("--minimal")
+                args.append("--line-log")
 
-        if internal == True:
+        if refresh == False:
+            printF(" ")
+            printF("&2Restarting script, please wait...")
+        elif refresh == True:
+            printF("&2Refreshing script, please wait...")
+
+        if internal == True and not "--minimal" in args:
             os.system("cls")
-        subprocess.Popen([sys.executable, 'ABDayDetector.py'] + args, creationflags=subprocess.CREATE_NEW_CONSOLE if internal == False else 0)
+        subprocess.Popen([sys.executable, os.path.basename(__file__)] + args, creationflags=subprocess.CREATE_NEW_CONSOLE if internal == False else 0)
         exit()
         printF("&7&oYou may close this terminal window.")
         return True
@@ -730,10 +744,11 @@ class Commands:
     def today(self, ui, args):
         try:
             possible_proxy = datetime.strptime(" ".join(args), "%B %d %Y") if len(args) > 0 else None
+            string = ui.get_today_string(possible_proxy)
             printF(" ")
             if possible_proxy is not None:
                 printF("&8&o(Proxy Date: " + str(" ".join(args)) + ")")
-            printF(ui.get_today_string(possible_proxy))
+            printF(string)
             printF(" ")
         except Exception as err:
             printF("&cAn error occurred, possible invalid proxy date? &8" + str(err))
@@ -931,36 +946,43 @@ class UserInterface:
         Log.text(" ")
         Log.text(" ")
 
-        cmd("cls")
-        printF("&6SCHOOL DAY DETECTOR &8v" + Updater.VERSION + (" &r&c&l&n(DEVELOPER BUILD)" if Updater.DEV_BUILD == True else ""))
-        printF("&e| &fWelcome to the the school day detector.")
-        printF(" ")
-        printF("&6WHAT?")
-        printF("&e| &fThis program lets you figure out if a day is going to be an A day or a B day.")
-        printF("&e| &fNOTE: The program will update its A/B day calculator with unexpected days off (e.g., snow) if they occur.")
-        printF(" ")
-        printF("&6HOW?")
-        printF("&e| &fEnter a date below and the program will give you any and all information about it.")
-        printF("&e| &fType &bhelp &fto view all the commands you can utilize and available date formats.")
-        printF("&e| &fType &bcontact &fif you need to contact Noah if you find any bugs or issues.")
-        printF("&e|  ")
-        printF("&e|   &r&6A SINGLE DATE:")
-        printF("&e|   &r&5| &fThe format should be: &aMONTH DAY YEAR")
-        printF("&e|   &r&5| &fFor example: &r&3" + now.strftime("%B " + self.number_of(now) + " %Y"))
-        printF("&e|  ")
-        printF("&e|   &r&6MULTIPLE DATES:")
-        printF("&e|   &r&5| &fThe format should be: &aMONTH DAY YEAR - MONTH DAY YEAR")
-        printF("&e|   &r&5| &fFor example: &r&3" + now.strftime("%B") + " 1 " + now.strftime("%Y") + " - " + now.strftime("%B") + " " + str(get_last_day_of_month(now).day) + " " + now.strftime("%Y"))
-        printF(" ")
-        if self.updater.delta_version > 0: # user needs to update teehee
-            printF("&6YOU ARE OUTDATED!")
-            if self.updater.delta_version != -1:
-                printF(f"&e| &eYou are {str(self.updater.delta_version)} version(s) out of date!")
-            printF("&e| &fCheck what version you're using by typing \"&bversion&f\"")
-            printF("&e| &fUpgrade your script automatically by typing \"&bupgrade&f\" &c&l(RECOMMENDED ASAP)")
+        if not (len(sys.argv) > 1 and "--minimal" in sys.argv):
+            cmd("cls")
+            printF("&6SCHOOL DAY DETECTOR &8v" + Updater.VERSION + (" &r&c&l&n(DEVELOPER BUILD)" if Updater.DEV_BUILD == True else ""))
+            printF("&e| &fWelcome to the the school day detector.")
             printF(" ")
-        printF(self.get_today_string())
-        printF(" ")
+            printF("&6WHAT?")
+            printF("&e| &fThis program lets you figure out if a day is going to be an A day or a B day.")
+            printF("&e| &fNOTE: The program will update its A/B day calculator with unexpected days off (e.g., snow) if they occur.")
+            printF(" ")
+            printF("&6HOW?")
+            printF("&e| &fEnter a date below and the program will give you any and all information about it.")
+            printF("&e| &fType &bhelp &fto view all the commands you can utilize and available date formats.")
+            printF("&e| &fType &bcontact &fif you need to contact Noah if you find any bugs or issues.")
+            printF("&e|  ")
+            printF("&e|   &r&6A SINGLE DATE:")
+            printF("&e|   &r&5| &fThe format should be: &aMONTH DAY YEAR")
+            printF("&e|   &r&5| &fFor example: &r&3" + now.strftime("%B " + self.number_of(now) + " %Y"))
+            printF("&e|  ")
+            printF("&e|   &r&6MULTIPLE DATES:")
+            printF("&e|   &r&5| &fThe format should be: &aMONTH DAY YEAR - MONTH DAY YEAR")
+            printF("&e|   &r&5| &fFor example: &r&3" + now.strftime("%B") + " 1 " + now.strftime("%Y") + " - " + now.strftime("%B") + " " + str(get_last_day_of_month(now).day) + " " + now.strftime("%Y"))
+            printF(" ")
+            if self.updater.delta_version > 0: # user needs to update teehee
+                printF("&6YOU ARE OUTDATED!")
+                if self.updater.delta_version != -1:
+                    printF(f"&e| &eYou are {str(self.updater.delta_version)} version(s) out of date!")
+                printF("&e| &fCheck what version you're using by typing \"&bversion&f\"")
+                printF("&e| &fUpgrade your script automatically by typing \"&bupgrade&f\" &c&l(RECOMMENDED ASAP)")
+                printF(" ")
+            try:
+                printF(self.get_today_string())
+            except Exception as err:
+                printF("&cAn error occurred: &8(get_today_string) " + str(err))
+            printF(" ")
+        else:
+            printF("Successfully started new instance: &6SCHOOL DAY DETECTOR &8v" + Updater.VERSION)
+            printF(" ")
         self.ask_input()
 
     # removes the extra zero in %d strftime in datetime
@@ -973,6 +995,9 @@ class UserInterface:
         now = datetime.now() if proxy_date == None else proxy_date
         suffix = ""
         next_day = self.assigner.get_next_school_day(now)
+
+        if as_epoch(now) > as_epoch(self.assigner.year_end) or as_epoch(now) < as_epoch(self.assigner.year_start):
+            raise ValueError("currently not in a school year, can't run get_today_string(proxy_date=None)")
 
         if next_day is not None: #don't show next school day if it's not a school day lol
             suffix = " " + next_day.strftime("%A, %B " + self.number_of(next_day) + self.assigner.get_ordinal_ending(next_day.day)) + " will be " + self.provide_information(next_day, prefix="")
@@ -1004,15 +1029,23 @@ class UserInterface:
     def date(self, string, date_format):
         return datetime.strptime(string, date_format)
 
+    # searches an input string for a regex pattern
     def search_regex(self, input_text, pattern):
         return list(self.search_regex_complex(input_text, pattern).values())
 
+    # returns a dictionary (map) of regex position matches along with what matched
+    # for example:
+    # input = "This is a 123 test"
+    # pattern = "\d{3}" (3 digits in a row)
+    # returned: {11: "123"}
+    # the start index is the start of the string rather than the end
     def search_regex_complex(self, input_text, pattern):
         returned = {}
         for item in re.compile(pattern).finditer(input_text):
             returned[item.span()[0]] = item.group(0)
         return returned
 
+    # check if a date can be parsed into a date format
     def is_date(self, string, date_format):
         try:
             self.date(string, date_format)
@@ -1110,8 +1143,11 @@ class UserInterface:
 
             dates = self.finalize_and_sort_input(dates)
 
-            if isinstance(dates, list) and len(dates) == 0:
-                raise ValueError("Failed to find dates from input: '" + str(user_input) + "'")
+            if isinstance(dates, list):
+                if len(dates) == 0:
+                    raise ValueError("Failed to find dates from input: '" + str(user_input) + "'")
+                if len(dates) == 1:
+                    dates = dates[0]
 
             return dates
         except Exception as err:
@@ -1151,12 +1187,15 @@ class UserInterface:
 
         printF(" ")
         printF(" ")
-        if isinstance(date, list):
-            for item in date:
-                self.print_information(item, True)
-            printF(" ")
-        else:
-            self.print_information(date)
+        try:
+            if isinstance(date, list):
+                for item in date:
+                    self.print_information(item, True)
+                printF(" ")
+            else:
+                self.print_information(date)
+        except Exception as err:
+            self.error("Standard error of type " + str(type(date)) + " during print information", date)
 
         self.ask_input()
 
@@ -1225,7 +1264,6 @@ if __name__ == "__main__":
 
         Log.text("Still in __name__ (" + str(__name__) + "), instantiating valued classes...")
         updater = Updater()
-        cmd(f"title School Day Detector v{Updater.VERSION} - Booting Program...")
         reader = RCPSWebsiteReader()
         assigner = ABDateAssigner(reader)
         commands = Commands()
