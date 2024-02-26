@@ -180,6 +180,7 @@ class Updater:
                 latest_data["latest"] = self.force_latest
 
             self.latest_version = latest_data["latest"]
+            self.latest_history = latest_data["history"]
             Log.text("Found latest data: " + str(latest_data))
             if not latest_data["latest"] == self.VERSION:
                 Log.text("** OUT OF DATE **")
@@ -667,7 +668,14 @@ class Commands:
         printF(" ")
         printF(" ")
         printF("&2Restarting script, please wait...")
-        os.startfile(__file__)
+        internal = False
+        for arg in args:
+            if "--internal" in arg:
+                internal = True
+
+        if internal == True:
+            os.system("cls")
+        subprocess.Popen([sys.executable, 'ABDayDetector.py'] + args, creationflags=subprocess.CREATE_NEW_CONSOLE if internal == False else 0)
         exit()
         printF("&7&oYou may close this terminal window.")
         return True
@@ -749,14 +757,13 @@ class Commands:
             elif args[index - 1] == "--dev-build":
                 dev = bool(arg)
             elif args[index - 1] == "--reboot-as":
-                os.system("cls")
-                subprocess.Popen([sys.executable, 'ABDayDetector.py'] + args)
-                exit()
+                self.restart(ui, ["--internal"] + args)
                 return True
         
         if len(args) > 0 and "--detail" in args[0]:
             printF(f"Found version: {version}")
             printF(f"Latest version: {latest}")
+            printF(f"Version History: {str(ui.updater.latest_history)}")
             printF(f"Delta: {str(delta)}")
             printF(f"Dev build: {str(dev).upper()}")
             printF(" ")
@@ -933,8 +940,8 @@ class UserInterface:
         printF("&e| &fNOTE: The program will update its A/B day calculator with unexpected days off (e.g., snow) if they occur.")
         printF(" ")
         printF("&6HOW?")
-        printF("&e| &fEnter a date below and the program will give you all information about it.")
-        printF("&e| &fType &bhelp &fto view all the commands you can utilize.")
+        printF("&e| &fEnter a date below and the program will give you any and all information about it.")
+        printF("&e| &fType &bhelp &fto view all the commands you can utilize and available date formats.")
         printF("&e| &fType &bcontact &fif you need to contact Noah if you find any bugs or issues.")
         printF("&e|  ")
         printF("&e|   &r&6A SINGLE DATE:")
@@ -1214,15 +1221,16 @@ if __name__ == "__main__":
         Log.text("Is non-IDLE? " + str(UserInterface.is_external()))
         Log.text("Loading color and title...")
         cmd("color") # necessary on windows 10 I believe
-        cmd("title School Day Detector - Retrieving Data...")
+        cmd(f"title School Day Detector - Booting Program...")
 
         Log.text("Still in __name__ (" + str(__name__) + "), instantiating valued classes...")
         updater = Updater()
+        cmd(f"title School Day Detector v{Updater.VERSION} - Booting Program...")
         reader = RCPSWebsiteReader()
         assigner = ABDateAssigner(reader)
         commands = Commands()
 
-        cmd("title School Day Detector")
+        cmd(f"title School Day Detector v{Updater.VERSION}")
         
         Log.text("Enjoy the program, made with <3 by Noah Franks")
         Log.text("| -> MAIN WEBSITE: www.noahf.net")
