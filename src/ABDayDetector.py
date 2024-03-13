@@ -689,11 +689,11 @@ class Commands:
 
         if internal == True and not "--minimal" in args:
             os.system("cls")
-        subprocess.Popen([sys.executable, os.path.basename(__file__)] + args, creationflags=subprocess.CREATE_NEW_CONSOLE if internal == False else 0)
+        subprocess.Popen([sys.executable, str(__file__)] + args, creationflags=subprocess.CREATE_NEW_CONSOLE if internal == False else 0)
         exit()
         printF("&7&oYou may close this terminal window.")
         return True
-
+    
     def exit(self, ui, args):
         printF(" ")
         printF(" ")
@@ -839,9 +839,23 @@ class Commands:
                     "reason": reason
                 }
             last_day = key
+
+            
         now = datetime.now()
         now_epoch = as_epoch(now)
         printed = False
+
+        def colorify(date):
+            epoch = as_epoch(date)
+            if epoch == now_epoch:
+                return "&r&a"
+            if epoch > now_epoch:
+                return "&r&3"
+            return "&r&c"
+
+        def print_now():
+            printF("&7&o" + now.strftime("%b " + ui.number_of(now) + " %Y") + ": " + ui.provide_information(now, prefix="", colored=False))
+        
         printF(" ")
         printF(f"&6DAYS OFF: &7({str(len(days_off.keys()))})")
         for key in days_off.keys():
@@ -849,17 +863,23 @@ class Commands:
             to_date = days_off[key]["to"]
             reason = days_off[key]["reason"]
 
-            date_before = as_epoch(days_off[key - 1]["from"]) if as_epoch(now) < as_epoch(ui.assigner.year_start) else as_epoch(ui.assigner.year_start)
-            if printed == False and date_before < now_epoch and as_epoch(from_date) > now_epoch:
-                printF("&7&o" + now.strftime("%b " + ui.number_of(now) + " %Y") + " -> " + ui.provide_information(now, prefix="", colored=False))
+            if as_epoch(from_date) >= now_epoch and as_epoch(to_date) <= now_epoch:
                 printed = True
 
-            prefix = ("&3" if as_epoch(from_date) > now_epoch else "&c") + from_date.strftime("%b " + ui.number_of(from_date) + " %Y")
+            date_before = as_epoch(days_off[key - 1]["from"]) if as_epoch(now) < as_epoch(ui.assigner.year_start) else as_epoch(ui.assigner.year_start)
+            if printed == False and date_before < now_epoch and as_epoch(from_date) > now_epoch:
+                print_now()
+                printed = True
+
+            prefix = colorify(from_date) + from_date.strftime("%b " + ui.number_of(from_date) + " %Y")
             if from_date != to_date:
-                prefix = prefix + " &7-> " + ("&3" if as_epoch(to_date) > now_epoch else "&c") + to_date.strftime("%b " + ui.number_of(to_date) + " %Y")
+                prefix = prefix + " &7-> " + colorify(to_date) + to_date.strftime("%b " + ui.number_of(to_date) + " %Y")
             prefix = prefix + "&f: "
             
             printF(prefix + "&e" + reason)
+
+        if printed == False:
+            print_now()
         printF(" ")
         return True
 
