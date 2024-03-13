@@ -49,7 +49,7 @@ class Log:
 class Updater:
 
     # this is the version the program thinks it is, please do not change
-    VERSION = "1.4"
+    VERSION = "1.4.1"
 
     DOWNLOAD_URL = "https://update.ab.download.noahf.net/"
     CHECK_URL = "https://update.ab.check.noahf.net/"
@@ -61,6 +61,10 @@ class Updater:
     # download a specified URL
     # the "path" is where the file is going to be saved to in the current working directory (CWD)
     def download(self, url, path):
+        def name_from_path(path):
+            split_items = path.split("\\")
+            return split_items[len(split_items) - 1]
+        
         Log.text("-> Downloading '" + str(url) + "'")
         if self.DEV_BUILD == True:
             # do NOT download dev builds, they were likely uploaded by accident
@@ -70,7 +74,7 @@ class Updater:
         file_size = len(request.content)
         all_data = []
         with tqdm( # tqdm for progress bar and data delay
-            desc=path,
+            desc=name_from_path(path),
             total=file_size,
             unit='iB',
             unit_scale=True,
@@ -130,14 +134,14 @@ class Updater:
                         ]
                     }
 
-            Log.text("Folder of all files set to " + str(self.FOLDER) + ", lookings to download " + str(len(json_data["tree"])) + " file(s)")
+            Log.text("Folder of all files set to " + str(self.FOLDER) + ", looking to download " + str(len(json_data["tree"])) + " file(s)")
 
             Log.text("Executing ~" + str(len(json_data["tree"])) + " download(s)...")
             Log.text(" ")
             tree = json_data["tree"]
             file_urls = []
             for file in tree:
-                self.download(self.FOLDER + str(file["path"]), os.path.basename(__file__))
+                self.download(self.FOLDER + str(file["path"]), __file__)
         except KeyboardInterrupt as err:
             Log.text("[  ---------       (MANUAL)        ---------  ]")
             Log.text("[  --------- END CHECK FOR UPDATES ---------  ]")
