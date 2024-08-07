@@ -49,7 +49,7 @@ class Log:
 class Updater:
 
     # this is the version the program thinks it is, please do not change
-    VERSION = "1.4.1"
+    VERSION = "1.5"
 
     DOWNLOAD_URL = "https://update.ab.download.noahf.net/"
     CHECK_URL = "https://update.ab.check.noahf.net/"
@@ -239,44 +239,39 @@ class Updater:
 
         Log.text("[  --------- END CHECK FOR UPDATES ---------  ]")
 
-# attempts to find the file in which Roanoke County contains all days off and why
-# this was originally not a problem but then I discovered that the county CHANGES
-# the URL everytime they update it, which makes it a pain to keep up-to-date without
-# this method. It searches the HTML for a file 'src=' that starts with /cms/lib and
-# contains 'aDayBDay_Dates' (as the county so lovingly calls it)
-class DatesFinder:
+class FindDatesList:
     def __init__(self):
-        Log.text("[  --------- BEGIN DATES FILE FINDER ---------  ]")
-        Log.text("Searching with base url '" + Constants.RCPS_WEBSITE + "'")
-        self.url = None
-        self.content = requests.get(Constants.RCPS_WEBSITE).text
-        Log.text("Found " + str(len(self.content.split("\n"))) + " lines (" + Constants.RCPS_WEBSITE + ")")
+        Log.text("[  --------- BEGIN FIND DATES LIST ---------  ]")
 
-        for index, line in enumerate(self.content.split("\n")):
-            if not "/cms/lib/" in line:
-                # not an interesting line lol
+        url = Constants.RCPS_WEBSITE
+        Log.text("RCPS Website: " + url)
+        
+        true_content = requests.get(url).text
+        Log.text("Found " + str(len(true_content.split("\n"))) + " lines on the RCPS website!")
+
+        self.content = []
+        dates_script = False
+        for line in true_content.split("\n"):
+            if "// DATE SCRIPT BELOW" in line:
+                dates_script = True
                 continue
-            if not "aDayBDay_Dates" in line:
-                # sure it's a /cms/lib, but not helpful to us
-                Log.text("Invalid /cms/lib line found: (" + str(index) + ") " + line + " (FAILED TO FIND aDayBDay_Dates)")
+
+            if not dates_script:
                 continue
-            Log.text("Valid /cms/lib line found: (" + str(index) + ") " + line)
-            begin_index = line.index('src="')
-            # often the line looks like
-            # <script src="/cms/lib/whatever/aDayBDay_dates_whatever">
-            # so if we find the src= and cut everything off before it
-            # then we split it at the quotation marks and get the first element, we have the URL (almost)
-            Log.text("Begin index of 'src=' at " + str(begin_index))
-            line = line[begin_index:len(line)]
-            Log.text("Found URI of file to be at (excluding domain): " + str(line.split('"')[1]))
-            self.url = Constants.RCPS_WEBSITE + line.split('"')[1]
-            Log.text("New URL set to '" + self.url + "' (line #" + str(index) + ")")
-            break
 
-        Log.text("[  --------- END DATES FILE FINDER ---------  ]")
+            if "</script>" in line:
+                dates_script = False
+                break
 
-    def get_url(self):
-        return self.url
+            self.content.append(line)
+
+        Log.text("Filtered website to " + str(len(self.content)) + " lines!")
+
+        Log.text("[  --------- END FIND DATES LIST ---------  ]")
+
+    def get_content(self):
+        return self.content
+
 
 class RCPSWebsiteReader:
     def date_from_text(self, text):
@@ -288,20 +283,14 @@ class RCPSWebsiteReader:
         #self.url = "https://www.rcps.us/cms/lib/VA01818713/Centricity/Template/17/setup/aDayBDay_Dates-011624.js?v=011624"
 
         try:
-            self.url = DatesFinder().get_url()
-            Log.text("Website reader found provided URL: " + str(self.url))
-            if self.url == None:
-                raise RuntimeError("URL not defined nor found on RCPS website")
+            self.content = FindDatesList().get_content()
             
-            self.content = requests.get(self.url).text
-            Log.text("Found " + str(len(self.content.split("\n"))) + " lines")
-
             reading_days_off = False
             self.days_off = {}
             self.year_start = None
             self.year_end = None
             Log.text("** Inspected lines will be cherry-picked via if they match conditions **")
-            for line in self.content.split("\n"):
+            for line in self.content:
                 if "ListOfDaysOff =" in line:
                     # we are now reading the days off and the program needs to know lmao
                     reading_days_off = True
@@ -664,12 +653,10 @@ class Commands:
 
     def contact(self, ui, args):
         printF(" ")
-        printF("&6SOCIAL MEDIA & EMAIL:")
-        printF("&bwww.noahf.net")
-        if as_epoch(datetime.now()) < as_epoch(ui.assigner.year_end):
-            printF(" ")
-            printF("&6SCHOOL EMAIL: &7(will disappear in Summer of 2024)")
-            printF("&bnfranks8036@student.rcps.us")
+        printF("&6WEBSITE: &bwww.noahf.net")
+        printF("&6INSTAGRAM: &bwww.instagram.com/noahf8036")
+        printF("&6TWITTER (X): &bwww.x.com/noahf8036")
+        printF("&6EMAIL: &bnfranks8036@gmail.com")
         printF(" ")
         return True
 
@@ -755,7 +742,7 @@ class Commands:
             printF(string)
             printF(" ")
         except Exception as err:
-            printF("&cAn error occurred, possible invalid proxy date? &8" + str(err))
+            printF("&cAn error occurred, possible invalid date? &8" + str(err))
 
         return True
 
@@ -866,21 +853,27 @@ class Commands:
             from_date = days_off[key]["from"]
             to_date = days_off[key]["to"]
             reason = days_off[key]["reason"]
-
-            if as_epoch(from_date) >= now_epoch and as_epoch(to_date) <= now_epoch:
-                printed = True
-
-            date_before = as_epoch(days_off[key - 1]["from"]) if as_epoch(now) < as_epoch(ui.assigner.year_start) else as_epoch(ui.assigner.year_start)
-            if printed == False and date_before < now_epoch and as_epoch(from_date) > now_epoch:
-                print_now()
-                printed = True
-
-            prefix = colorify(from_date) + from_date.strftime("%b " + ui.number_of(from_date) + " %Y")
-            if from_date != to_date:
-                prefix = prefix + " &7-> " + colorify(to_date) + to_date.strftime("%b " + ui.number_of(to_date) + " %Y")
-            prefix = prefix + "&f: "
             
-            printF(prefix + "&e" + reason)
+            try:
+                if as_epoch(from_date) >= now_epoch and as_epoch(to_date) <= now_epoch:
+                    printed = True
+
+                date_before = as_epoch(days_off[key - 1]["from"]) if as_epoch(now) < as_epoch(ui.assigner.year_start) else as_epoch(ui.assigner.year_start)
+                if printed == False and date_before < now_epoch and as_epoch(from_date) > now_epoch:
+                    print_now()
+                    printed = True
+
+                prefix = colorify(from_date) + from_date.strftime("%b " + ui.number_of(from_date) + " %Y")
+                if from_date != to_date:
+                    prefix = prefix + " &7-> " + colorify(to_date) + to_date.strftime("%b " + ui.number_of(to_date) + " %Y")
+                prefix = prefix + "&f: "
+                
+                printF(prefix + "&e" + reason)
+            except Exception as err:
+                try:
+                    printF("&r&3" + from_date.strftime("%b " + ui.number_of(from_date) + " %Y") + " &7-> &r&3" + to_date.strftime("%b " + ui.number_of(to_date) + " %Y") + "&f: &e" + reason)
+                except Exception as err2:
+                    printF("&cAn error occurred: &8" + str(err2) + " caused by " + str(err))
 
         if printed == False:
             print_now()
@@ -1021,7 +1014,7 @@ class UserInterface:
         next_day = self.assigner.get_next_school_day(now)
 
         if as_epoch(now) > as_epoch(self.assigner.year_end) or as_epoch(now) < as_epoch(self.assigner.year_start):
-            raise ValueError("currently not in a school year, can't run get_today_string(proxy_date=None)")
+            raise ValueError("currently not in a school year, can't show today text")
 
         if next_day is not None: #don't show next school day if it's not a school day lol
             suffix = " " + next_day.strftime("%A, %B " + self.number_of(next_day) + self.assigner.get_ordinal_ending(next_day.day)) + " will be " + self.provide_information(next_day, prefix="")

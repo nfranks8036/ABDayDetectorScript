@@ -10,7 +10,7 @@ import json
 import platform
 import time as threadcontrol
 
-VERSION = "0.6i-02252024"
+VERSION = "0.7i-08072024"
 
 def cmd(command):
     if is_external():
@@ -185,7 +185,7 @@ class Installer():
         printF("&aGreat! &7&oThe script will begin installing in a few seconds...")
         printF("&c&lDO NOT &fclose the window.")
         threadcontrol.sleep(1)
-        subprocess.Popen([r'python', 'install.py', '--skip-dependencies'])
+        subprocess.Popen([r'python', 'install.py', '--skip-dependencies'], cwd=os.path.dirname(os.path.realpath(__file__)))
         exit()
 
 if __name__ == "__main__":
@@ -193,9 +193,9 @@ if __name__ == "__main__":
         if "Windows" not in platform.system():
             print("*** This program REQUIRES Windows to run! ***")
             print("*** If you are not using Windows, some or all functionality may be broken! ***")
-            print("*** The script will continue anyway in 10 seconds! Please wait. ***")
+            print("*** The script will continue anyway in 5 seconds! Please wait. ***")
             print(" ")
-            threadcontrol.sleep(10)
+            threadcontrol.sleep(5)
         os.system("cls >NUL")
         Installer()
     except Exception as err:
