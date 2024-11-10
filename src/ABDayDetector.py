@@ -49,7 +49,7 @@ class Log:
 class Updater:
 
     # this is the version the program thinks it is, please do not change
-    VERSION = "1.5"
+    VERSION = "1.6"
 
     DOWNLOAD_URL = "https://update.ab.download.noahf.net/"
     CHECK_URL = "https://update.ab.check.noahf.net/"
@@ -252,14 +252,14 @@ class FindDatesList:
         self.content = []
         dates_script = False
         for line in true_content.split("\n"):
-            if "// DATE SCRIPT BELOW" in line:
+            if "The following four sections must be updated " in line:
                 dates_script = True
                 continue
 
             if not dates_script:
                 continue
 
-            if "</script>" in line:
+            if "Nothing should need to be updated below this line." in line:
                 dates_script = False
                 break
 
@@ -344,7 +344,12 @@ class RCPSWebsiteReader:
                         Log.text("Failed to find month in list element, ignoring this element.")
                         continue
 
-                    self.days_off[self.date_from_text(date)] = str(reason)
+                    try:
+                        self.days_off[self.date_from_text(date)] = str(reason)
+                    except Exception as err:
+                        Log.text("LINE FAILED TO TURN INTO DATE: " + line + ", CONSIDER INSPECTING!")
+                        Log.text("^^^ ERROR: " + str(type(err)) + " - " + str(err))
+                    
         except Exception as err:
              Log.text(traceback.format_exc())
 
