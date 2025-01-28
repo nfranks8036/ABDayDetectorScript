@@ -49,7 +49,7 @@ class Log:
 class Updater:
 
     # this is the version the program thinks it is, please do not change
-    VERSION = "1.6"
+    VERSION = "1.7"
 
     DOWNLOAD_URL = "https://update.ab.download.noahf.net/"
     CHECK_URL = "https://update.ab.check.noahf.net/"
@@ -455,25 +455,93 @@ class ABDateAssigner:
         
         return value
 
+    def get_every_day_information(self):
+        days = {}
+        
+        school_days = {}
+        calendar_days = 0
+        amt_days_off = 0
+
+        Log.text("|- Compiling date information from year_start...")
+        current_date = self.year_start
+        day_letter = False # true = A Day
+        while as_epoch(current_date) < as_epoch(self.year_end + timedelta(days=1)):
+            date_type = self.get_date_type(current_date)
+            days[current_date] = {
+                    "type": date_type,
+                    "index": {
+                        "calendar": calendar_days,
+                        "school": school_days["ALL"] if "ALL" in school_days.keys() else 0
+                    },
+                    "_meta_": None
+            }
+            
+            if date_type == DateType.SCHOOL_DAY:
+                day_letter = not day_letter
+                if not ("ALL" in school_days.keys()):
+                    school_days["ALL"] = 0
+                if not (DayLetter.value_of(day_letter) in school_days.keys()):
+                    school_days[DayLetter.value_of(day_letter)] = 0
+                
+                school_days["ALL"] += 1
+                school_days[DayLetter.value_of(day_letter)] += 1
+                days[current_date]["_meta_"] = {
+                    "day_letter_formatted": DayLetter.value_of(day_letter),
+                    "day_letter": day_letter
+                }
+            elif date_type == DateType.DAY_OFF:
+                days[current_date]["_meta_"] = {
+                    "reason": self.get_day_off_reason(current_date)
+                }
+                amt_days_off += 1
+
+            calendar_days += 1
+            current_date = current_date + timedelta(days=1)
+
+        days["_meta_"] = {
+            "school_days": school_days,
+            "calendar_days": calendar_days,
+            "days_off": amt_days_off
+        }
+        Log.text("| Found " + str(calendar_days) + " calendary days")
+        
+        def stringify_dates(obj):
+            if isinstance(obj, dict):
+                return {stringify_dates(k): stringify_dates(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [stringify_dates(i) for i in obj]
+            elif isinstance(obj, date):
+                return str(obj)
+            else:
+                return obj
+        
+        loc = os.getenv("TEMP")
+        ab_day_detector_dir = os.path.join(loc, "ABDayDetector")
+        os.makedirs(ab_day_detector_dir, exist_ok=True)
+        days_file = os.path.join(ab_day_detector_dir, "cached_days.json")
+        Log.text("| Creating cached days at " + days_file)
+        
+        f = open(days_file, "w")
+        Log.text("| Writing (and stringifying) dictionary...")
+        f.write(json.dumps(stringify_dates(days), indent=4))
+        f.close()
+
+        Log.text("|- Wrote File")
+
+        return days
+            
+
     def get_day_letter(self, date):
         date = self.normalize(date)
 
         if not self.get_date_type(date) == DateType.SCHOOL_DAY:
             return None
 
-        current_date = self.year_start
-        day_letter = False                  # true = A day
-        while as_epoch(current_date) < as_epoch(date + timedelta(days=1)):
-            if self.get_date_type(current_date) == DateType.SCHOOL_DAY:
-                day_letter = not day_letter
-            current_date = current_date + timedelta(days=1)
-
         # this is the same as going through every day since the beginning of the year and
         # counting "A" then "B" then "A" while skipping days off, breaks, and weekends accurately
         # (except this is much faster cuz hooman slow, compter fast)
 
-        return day_letter
-        
+        return self.days[date]["_meta_"]["day_letter"]
 
     def get_day_off_reason(self, date):
         date = self.normalize(date)
@@ -492,10 +560,19 @@ class ABDateAssigner:
 
         for index in range(0, 14):
             date = date + timedelta(days=1)
-            if self.get_date_type(date) == DateType.SCHOOL_DAY:
+            if self.days[date]["type"] == DateType.SCHOOL_DAY:
                 return date
 
         return None
+
+    def get_progression(self, date):
+        date = self.normalize(date)
+
+        indices = self.days[date]["index"]
+        return indices["calendar"], indices["school"]
+
+    def get_total_days(self):
+        return self.days["_meta_"]["calendar_days"], self.days["_meta_"]["school_days"]["ALL"]
     
     def __init__(self, website: RCPSWebsiteReader):
         # self.today = datetime.now()
@@ -512,6 +589,9 @@ class ABDateAssigner:
 
         self.days_off = website.get_days_off()
         Log.text("Found " + str(len(self.days_off.keys())) + " days off")
+
+        self.days = self.get_every_day_information()
+        Log.text("Found " + str(len(self.days) - 1) + " calendar days")
 
     def get_days_off(self):
         return self.days_off
@@ -621,10 +701,10 @@ class Commands:
             self.today
         )
         self.register(
-            {"name": "showdaysoff",
-             "aliases": ["daysoff", "show_days_off", "showbreak", "showbreaks", "breaks", "break"],
-             "desc": "Shows all days off and breaks for the current school year."},
-            self.show_days_off
+            {"name": "showdays",
+             "aliases": ["days", "day", "showdaysoff", "daysoff", "show_days_off", "showbreak", "showbreaks", "breaks", "break"],
+             "desc": "Shows all days off and breaks, how many days are left for school, and how many days has it been."},
+            self.show_days
         )
         self.register(
             {"name": "share",
@@ -810,7 +890,7 @@ class Commands:
         printF(" ")
         return True
 
-    def show_days_off(self, ui, args):
+    def show_days(self, ui, args):
         days_off = {}
         last_index = 0
         last_day = None
@@ -882,6 +962,19 @@ class Commands:
 
         if printed == False:
             print_now()
+
+        cd_total, sd_total = ui.assigner.get_total_days()
+        cd_experienced, sd_experienced = ui.assigner.get_progression(now)
+        cd_left, sd_left = cd_total - cd_experienced, sd_total - sd_experienced
+        cd_percent, sd_percent = (cd_experienced / cd_total) * 100, (sd_experienced / sd_total) * 100
+
+        cd_percent, sd_percent = round(cd_percent), round(sd_percent)
+
+        current_a_day_index, current_b_day_index = 0, 0
+        
+        printF(" ")
+        printF(f"&fSchool Days: &b{str(sd_experienced)}&7/&e{str(sd_total)} &f(&d{str(sd_percent)}%&f) (&a{str(sd_left)} &fleft)")
+        printF(f"&fCalendar Days: &b{str(cd_experienced)}&7/&e{str(cd_total)} &f(&d{str(cd_percent)}%&f) (&a{str(cd_left)} &fleft)")
         printF(" ")
         return True
 
