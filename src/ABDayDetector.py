@@ -49,7 +49,7 @@ class Log:
 class Updater:
 
     # this is the version the program thinks it is, please do not change
-    VERSION = "1.8"
+    VERSION = "1.8.1"
 
     DOWNLOAD_URL = "https://update.ab.download.noahf.net/"
     CHECK_URL = "https://update.ab.check.noahf.net/"
@@ -153,6 +153,44 @@ class Updater:
         Log.text("[  --------- END CHECK FOR UPDATES ---------  ]")
         Log.text(" ")
     
+    # forces the program to error out to test development tools related to it
+    # different numbers mean different locations for the error to occur
+    # can also be activated by the sys arg flag --force-error <num>
+    # None = no force error happening this boot
+    # 0 = before the FindDatesList attempts to pull from the website
+    # 1 = while the FindDatesList is iterating through lines
+    # 2 = after the FindDatesList finishes its duty
+    # 3 = when RCPSWebsiteReader starts
+    # 4 = before RCPSWebsiteReader inspects the detected lines
+    # 5 = while RCPSWebsiteReader is inspecting the detected lines
+    # 6 = after RCPSWebsiteReader has completed its duties
+    # 7 = while ABDayAssigner attempts to normalize all the detected days off
+    # 8 = whenever anybody tries to grab the year start from RCPSWebsiteReader
+    # 9 = whenever anybody tries to grab the year end from RCPSWebsiteReader
+    FORCE_ERROR_LOCATIONS = {
+            None: "no force error happening this boot",
+            0: "before the FindDatesList attempts to pull from the website",
+            1: "while the FindDatesList is iterating through lines",
+            2: "after the FindDatesList finishes its duty",
+            3: "when RCPSWebsiteReader starts",
+            4: "before RCPSWebsiteReader inspects the detected lines",
+            5: "while RCPSWebsiteReader is inspecting the detected lines",
+            6: "after RCPSWebsiteReader has completed its duties",
+            7: "while ABDayAssigner attempts to normalize all the detected days off",
+            8: "whenever anybody tries to grab the year start from RCPSWebsiteReader",
+            9: "whenever anybody tries to grab the year end from RCPSWebsiteReader",
+        }
+    FORCE_ERROR = None
+    
+    @staticmethod
+    def check_force_error(position):
+        if Updater.FORCE_ERROR == None:
+            return
+        elif not Updater.FORCE_ERROR == position:
+            return
+        Log.text(f"#################### FORCE ERROR APPLIED AT THIS POSITION ({str(position)}) ####################")
+        raise Exception(f"Force error activated at position {str(position)}")
+    
     def __init__(self):
         Log.text("[  --------- BEGIN CHECK FOR UPDATES ---------  ]")
         try:
@@ -166,6 +204,11 @@ class Updater:
                         self.force_latest = arg
                     elif sys.argv[index - 1] == "--dev-build":
                         Updater.DEV_BUILD = bool(arg)
+                    elif sys.argv[index - 1] == "--force-error":
+                        try:
+                            Updater.FORCE_ERROR = int(arg)
+                        except ValueError:
+                            Updater.FORCE_ERROR = None
 
             Log.text("Initializing updater...")
             Log.text("Found environment: " + str({
@@ -243,6 +286,8 @@ class FindDatesList:
     def __init__(self):
         Log.text("[  --------- BEGIN FIND DATES LIST ---------  ]")
 
+        Updater.check_force_error(0)
+    
         url = Constants.RCPS_WEBSITE
         Log.text("RCPS Website: " + url)
         
@@ -252,6 +297,8 @@ class FindDatesList:
         self.content = []
         dates_script = False
         for line in true_content.split("\n"):
+            Updater.check_force_error(1)
+            
             if "The following four sections must be updated " in line:
                 dates_script = True
                 continue
@@ -267,6 +314,8 @@ class FindDatesList:
 
         Log.text("Filtered website to " + str(len(self.content)) + " lines!")
 
+        Updater.check_force_error(2)
+
         Log.text("[  --------- END FIND DATES LIST ---------  ]")
 
     def get_content(self):
@@ -280,78 +329,81 @@ class RCPSWebsiteReader:
     def __init__(self):
         Log.text("----------- BEGIN WEBSITE READER -----------")
         
+        Updater.check_force_error(3)
+        
         #self.url = "https://www.rcps.us/cms/lib/VA01818713/Centricity/Template/17/setup/aDayBDay_Dates-011624.js?v=011624"
 
-        try:
-            self.content = FindDatesList().get_content()
+        self.content = FindDatesList().get_content()
             
-            reading_days_off = False
-            self.days_off = {}
-            self.year_start = None
-            self.year_end = None
-            Log.text("** Inspected lines will be cherry-picked via if they match conditions **")
-            for line in self.content:
-                if "ListOfDaysOff =" in line:
-                    # we are now reading the days off and the program needs to know lmao
-                    reading_days_off = True
-                    Log.text("---[ Now reading days off and their reason ]---")
+        Updater.check_force_error(4)
+        
+        reading_days_off = False
+        self.days_off = {}
+        self.year_start = None
+        self.year_end = None
+        Log.text("** Inspected lines will be cherry-picked via if they match conditions **")
+        for line in self.content:
+            Updater.check_force_error(5)
+            if "ListOfDaysOff =" in line:
+                # we are now reading the days off and the program needs to know lmao
+                reading_days_off = True
+                Log.text("---[ Now reading days off and their reason ]---")
+                continue
+
+            if "StartOfYearDate =" in line: #StartOfYearDate =
+                Log.text("Inspecting: " + str(line))
+                self.year_start = self.date_from_text(line.split('"')[1])
+                Log.text("The year starts " + str(self.year_start))
+
+            if "LastDayOfExams =" in line:
+                Log.text("Inspecting: " + str(line))
+                self.year_end = self.date_from_text(line.split('"')[1])
+                Log.text("The year ends " + str(self.year_end))
+
+            if reading_days_off == True:
+                if "]" in line:
+                    # arrays in JS end in "]", we know we're done with days off now
+                    Log.text("Inspecting: " + str(line))
+                    Log.text("Discovered NO LONGER reading days off, removing var")
+                    reading_days_off = False
+                    Log.text("Days off: " + str(self.days_off))
+                    Log.text("---[ Exiting days off and their reason ]---")
                     continue
 
-                if "StartOfYearDate =" in line: #StartOfYearDate =
-                    Log.text("Inspecting: " + str(line))
-                    self.year_start = self.date_from_text(line.split('"')[1])
-                    Log.text("The year starts " + str(self.year_start))
 
-                if "LastDayOfExams =" in line:
-                    Log.text("Inspecting: " + str(line))
-                    self.year_end = self.date_from_text(line.split('"')[1])
-                    Log.text("The year ends " + str(self.year_end))
+                line = line.strip()
+                Log.text("Inspecting: " + line)
+                elements = line.split('\"')
+                if not len(elements) == 5:
+                    Log.text("List element does not split properly, ignoring this element.")
+                    continue
 
-                if reading_days_off == True:
-                    if "]" in line:
-                        # arrays in JS end in "]", we know we're done with days off now
-                        Log.text("Inspecting: " + str(line))
-                        Log.text("Discovered NO LONGER reading days off, removing var")
-                        reading_days_off = False
-                        Log.text("Days off: " + str(self.days_off))
-                        Log.text("---[ Exiting days off and their reason ]---")
-                        continue
-
-
-                    line = line.strip()
-                    Log.text("Inspecting: " + line)
-                    elements = line.split('\"')
-                    if not len(elements) == 5:
-                        Log.text("List element does not split properly, ignoring this element.")
-                        continue
-
-                    # lines often look like: new Date("August 1, 2023 12:00:00")
-                    # we can split at " and get first element ([0])
-                        
-                    date = elements[1]
-                    reason = elements[3]
-
-                    # we need a way to verify the line, thus we use the month
-                    # the constants class contains every month that could possibly exist
-                    # and since the date will need a month (because, it's a *DATE*), this
-                    # becomes a reliable way to check for validity
-                    valid = False
-                    for month in Constants.MONTHS:
-                        if month in date:
-                            valid = True
-                            break
-                    if valid == False:
-                        Log.text("Failed to find month in list element, ignoring this element.")
-                        continue
-
-                    try:
-                        self.days_off[self.date_from_text(date)] = str(reason)
-                    except Exception as err:
-                        Log.text("LINE FAILED TO TURN INTO DATE: " + line + ", CONSIDER INSPECTING!")
-                        Log.text("^^^ ERROR: " + str(type(err)) + " - " + str(err))
+                # lines often look like: new Date("August 1, 2023 12:00:00")
+                # we can split at " and get first element ([0])
                     
-        except Exception as err:
-             Log.text(traceback.format_exc())
+                date = elements[1]
+                reason = elements[3]
+
+                # we need a way to verify the line, thus we use the month
+                # the constants class contains every month that could possibly exist
+                # and since the date will need a month (because, it's a *DATE*), this
+                # becomes a reliable way to check for validity
+                valid = False
+                for month in Constants.MONTHS:
+                    if month in date:
+                        valid = True
+                        break
+                if valid == False:
+                    Log.text("Failed to find month in list element, ignoring this element.")
+                    continue
+
+                try:
+                    self.days_off[self.date_from_text(date)] = str(reason)
+                except Exception as err:
+                    Log.text("LINE FAILED TO TURN INTO DATE: " + line + ", CONSIDER INSPECTING!")
+                    Log.text("^^^ ERROR: " + str(type(err)) + " - " + str(err))
+             
+        Updater.check_force_error(6)
 
         Log.text("----------- END WEBSITE READER -----------")
         Log.text(" ")
@@ -360,9 +412,11 @@ class RCPSWebsiteReader:
         return self.days_off
 
     def get_year_start(self):
+        Updater.check_force_error(8)
         return self.year_start
 
     def get_year_end(self):
+        Updater.check_force_error(9)
         return self.year_end
 
 class DayLetter:
@@ -462,6 +516,7 @@ class ABDateAssigner:
         calendar_days = 0
         amt_days_off = 0
 
+        Updater.check_force_error(7)
         Log.text("|- Compiling date information from year_start...")
         current_date = self.year_start
         day_letter = False # true = A Day
@@ -574,9 +629,18 @@ class ABDateAssigner:
     def get_total_days(self):
         return self.days["_meta_"]["calendar_days"], self.days["_meta_"]["school_days"]["ALL"]
     
-    def __init__(self, website: RCPSWebsiteReader):
+    def __init__(self):
         self.fatal_error = None
         # self.today = datetime.now()
+        
+        try:
+            website = RCPSWebsiteReader()
+        except Exception as err:
+            self.fatal_error = err
+            self.fatal_traceback = err.__traceback__
+            Log.text(f"FATAL ERROR in reading the RCPS website: {str(err)}")
+            return
+        
         Log.text("* Summary of Found Data *")
         
         self.today = datetime.now()
@@ -595,6 +659,7 @@ class ABDateAssigner:
             self.fatal_error = err
             self.fatal_traceback = err.__traceback__
             Log.text(f"FATAL ERROR in finding year start and year end: {str(err)}")
+            return
 
         try:
             self.days_off = website.get_days_off()
@@ -606,6 +671,7 @@ class ABDateAssigner:
             self.fatal_error = err
             self.fatal_traceback = err.__traceback__
             Log.text(f"FATAL ERROR in finding days off: {str(err)}")
+            return
 
         try:
             self.days = self.get_every_day_information()
@@ -614,6 +680,7 @@ class ABDateAssigner:
             self.fatal_error = err
             self.fatal_traceback = err.__traceback__
             Log.text(f"FATAL ERROR in finding calendar days: {str(err)}")
+            return
 
     def get_days_off(self):
         return self.days_off
@@ -830,7 +897,7 @@ class Commands:
     def restart(self, ui, args):
         printF(" ")
         internal, refresh = False, False
-        for arg in args:
+        for index, arg in enumerate(args):
             if "--internal" in arg:
                 internal = True
             if "--refresh" in arg or "-rf" in arg:
@@ -838,6 +905,8 @@ class Commands:
                 args.append("--internal")
                 args.append("--minimal")
                 args.append("--line-log")
+            if "-fe" in arg:
+                args[index] = "--force-error"
 
         if refresh == False:
             printF(" ")
@@ -1065,6 +1134,11 @@ class Commands:
         printF("&6DETECTED TRACEBACK OF ERROR:")
         traceback.print_exception(type(ui.assigner.fatal_error), ui.assigner.fatal_error, ui.assigner.fatal_traceback)
         printF(" ")
+        if Updater.FORCE_ERROR is not None:
+            printF("&6FORCE ERROR:")
+            printF(f"&fThis error was intentionally caused &e{str(Updater.FORCE_ERROR_LOCATIONS[Updater.FORCE_ERROR])}&f!")
+            printF("&7&oRestart the program to resume normal use.")
+            printF(" ")
         printF("&fView the logs by typing &blogs")
         printF(" ")
         return True
@@ -1485,8 +1559,7 @@ if __name__ == "__main__":
 
         Log.text("Still in __name__ (" + str(__name__) + "), instantiating valued classes...")
         updater = Updater()
-        reader = RCPSWebsiteReader()
-        assigner = ABDateAssigner(reader)
+        assigner = ABDateAssigner()
         commands = Commands()
 
         cmd(f"title School Day Detector v{Updater.VERSION}")
