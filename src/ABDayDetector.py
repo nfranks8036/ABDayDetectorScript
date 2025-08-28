@@ -49,7 +49,7 @@ class Log:
 class Updater:
 
     # this is the version the program thinks it is, please do not change
-    VERSION = "1.7"
+    VERSION = "1.8"
 
     DOWNLOAD_URL = "https://update.ab.download.noahf.net/"
     CHECK_URL = "https://update.ab.check.noahf.net/"
@@ -297,7 +297,7 @@ class RCPSWebsiteReader:
                     Log.text("---[ Now reading days off and their reason ]---")
                     continue
 
-                if "StartOfYearDate =" in line:
+                if "StartOfYearDate =" in line: #StartOfYearDate =
                     Log.text("Inspecting: " + str(line))
                     self.year_start = self.date_from_text(line.split('"')[1])
                     Log.text("The year starts " + str(self.year_start))
@@ -575,23 +575,45 @@ class ABDateAssigner:
         return self.days["_meta_"]["calendar_days"], self.days["_meta_"]["school_days"]["ALL"]
     
     def __init__(self, website: RCPSWebsiteReader):
+        self.fatal_error = None
         # self.today = datetime.now()
         Log.text("* Summary of Found Data *")
         
         self.today = datetime.now()
         Log.text("Today is " + str(self.today))
 
-        self.year_start = website.get_year_start()
-        self.year_end = website.get_year_end()
+        try:
+            self.year_start = website.get_year_start()
+            self.year_end = website.get_year_end()
 
-        Log.text("The year starts " + str(self.year_start))
-        Log.text("The year ends " + str(self.year_end))
+            Log.text("The year starts " + str(self.year_start))
+            Log.text("The year ends " + str(self.year_end))
+            
+            if self.year_start == None or self.year_end == None:
+                raise Exception("Either year start or year end is absent.")
+        except Exception as err:
+            self.fatal_error = err
+            self.fatal_traceback = err.__traceback__
+            Log.text(f"FATAL ERROR in finding year start and year end: {str(err)}")
 
-        self.days_off = website.get_days_off()
-        Log.text("Found " + str(len(self.days_off.keys())) + " days off")
+        try:
+            self.days_off = website.get_days_off()
+            Log.text("Found " + str(len(self.days_off.keys())) + " days off")
+            
+            if str(len(self.days_off.keys())) == 0:
+                raise Exception("No days off detected: 0")
+        except Exception as err:
+            self.fatal_error = err
+            self.fatal_traceback = err.__traceback__
+            Log.text(f"FATAL ERROR in finding days off: {str(err)}")
 
-        self.days = self.get_every_day_information()
-        Log.text("Found " + str(len(self.days) - 1) + " calendar days")
+        try:
+            self.days = self.get_every_day_information()
+            Log.text("Found " + str(len(self.days) - 1) + " calendar days")
+        except Exception as err:
+            self.fatal_error = err
+            self.fatal_traceback = err.__traceback__
+            Log.text(f"FATAL ERROR in finding calendar days: {str(err)}")
 
     def get_days_off(self):
         return self.days_off
@@ -614,7 +636,7 @@ def get_last_day_of_month(day):
 # commands are the alternate to writing a date in the command line
 # they execute arbitrary code with certain argumetns
 class Commands:
-    def register(self, data: dict, function):
+    def register(self, data: dict, function, require=None):
         # structure:
         # {[
         #   "command_name": {
@@ -628,9 +650,22 @@ class Commands:
         
         self.commands[data["name"]] = {
             "data": data,
-            "func": function
+            "func": function,
+            "reqs": require,
             }
         Log.text("Registered command: " + str(data))
+
+    def conditional_register(self, assigner):
+        if assigner.fatal_error is not None:
+            self.register(
+                {"name": "inspect",
+                 "aliases": ["showfatal"],
+                 "desc": "Inspects a fatal error if they occur."},
+                self.inspect,
+                self.req_fatal_error
+            )
+        
+        return self
 
     # evaluates a given input from the command line, usually barely touched by the program already
     def evaluate(self, ui, inputted) -> bool:
@@ -651,7 +686,28 @@ class Commands:
             if inputted_command in command_info["data"]["aliases"]: # check if they executed alias
                 command = command_info
                 break
+        
+        try:
+            if command is not None and command["reqs"] is not None and command["reqs"](ui) == False:
+                raise Exception("This command failed a required condition, no other information was specified.")
+        except Exception as err:
+            printF(" ")
+            printF(f"&cFailed to execute {str(inputted_command)}, try again later!")
+            printF(f"&7&o{str(err)}")
+            printF(" ")
+            return True
+        
         return command["func"](ui, inputted_args) if command is not None else False
+
+    def req_no_fatal_errors(self, ui):
+        if ui.assigner.fatal_error is None:
+            return True
+        raise Exception("This command is disabled because a fatal exception in the program was detected. Try restarting your program by typing 'restart' and view the start message for more information.")
+
+    def req_fatal_error(self, ui):
+        if ui.assigner.fatal_error is not None:
+            return True
+        raise Exception("This command is disabled because no fatal errors have occurred!")
 
     # register all the commands because yes this is necessary and no I'm not doing the python
     # version of java reflections, this is easier for now
@@ -698,13 +754,17 @@ class Commands:
             {"name": "today",
              "aliases": [],
              "desc": "Checks the A or B day status of the current day."},
-            self.today
+            self.today,
+            
+            self.req_no_fatal_errors
         )
         self.register(
             {"name": "showdays",
              "aliases": ["days", "day", "showdaysoff", "daysoff", "show_days_off", "showbreak", "showbreaks", "breaks", "break"],
              "desc": "Shows all days off and breaks, how many days are left for school, and how many days has it been."},
-            self.show_days
+            self.show_days,
+            
+            self.req_no_fatal_errors
         )
         self.register(
             {"name": "share",
@@ -724,15 +784,37 @@ class Commands:
         printF("&6AVAILABLE COMMANDS:")
         for key in self.commands:
             command = self.commands[key]
-            printF("&b" + str(command["data"]["name"]) + "&f: " + str(command["data"]["desc"]))
+            enabled = True
+            try:
+                if command["reqs"] is not None and command["reqs"](ui) == False:
+                    raise Exception()
+            except Exception as err:
+                enabled = False
+            printF(("&b" if enabled == True else "&c") + str(command["data"]["name"]) + "&f: " + str(command["data"]["desc"]))
         printF(" ")
-        printF("&6AVAILABLE DATE FORMATS:")
-        for date_format in UserInterface.DATE_FORMATS:
-            raw_format = date_format
-            character_map = UserInterface.DATES_CHARACTER_MAP
-            for key in character_map.keys():
-                date_format = date_format.replace(key, character_map[key][0])
-            printF("&b" + str(date_format) + "&f: " + datetime.now().strftime(raw_format))
+        if ui.assigner.fatal_error is None:
+            printF("&6AVAILABLE DATE FORMATS:")
+            for date_format in UserInterface.DATE_FORMATS:
+                raw_format = date_format
+                character_map = UserInterface.DATES_CHARACTER_MAP
+                for key in character_map.keys():
+                    date_format = date_format.replace(key, character_map[key][0])
+                printF("&b" + str(date_format) + "&f: " + datetime.now().strftime(raw_format))
+        else:
+            printF("&6ERROR!")
+            printF("&fIt seems a fatal error occurred while trying to grab and/or calculate the necessary information.")
+            printF("&fUnfortunately, &cthis means the program cannot continue as intended.")
+            printF("&fMost features have been disabled to prevent crashes.")
+            printF("")
+            printF("&r&6SOLUTIONS:")
+            printF("&r&5| &fEnsure you are connected to a stable internet connection.")
+            printF("&r&5| &fCheck if the program is outdated by typing &bversion&f.")
+            printF("&r&5|     &7&o(If outdated, consider upgrading by typing &b&oupgrade&7&o)")
+            printF("&r&5| &fReinstall the program by typing &bupgrade force&f, which can fix a lot of issues.")
+            printF("&r&5| &fContact the developer for any other issues by typing &bcontact&f.")
+            printF("")
+            printF("&6DETECTED ERROR:")
+            printF(f"&8&o{str(ui.assigner.fatal_error)}, see more with &b&oinspect")
         printF(" ")
         return True
 
@@ -977,6 +1059,15 @@ class Commands:
         printF(f"&fCalendar Days: &b{str(cd_experienced)}&7/&e{str(cd_total)} &f(&d{str(cd_percent)}%&f) (&a{str(cd_left)} &fleft)")
         printF(" ")
         return True
+        
+    def inspect(self, ui, args):
+        printF(" ")
+        printF("&6DETECTED TRACEBACK OF ERROR:")
+        traceback.print_exception(type(ui.assigner.fatal_error), ui.assigner.fatal_error, ui.assigner.fatal_traceback)
+        printF(" ")
+        printF("&fView the logs by typing &blogs")
+        printF(" ")
+        return True
 
 # the user interface
 # the MOTD and instructions
@@ -1050,7 +1141,7 @@ class UserInterface:
     
     def __init__(self, ab_date_assigner: ABDateAssigner, commands: Commands, updater: Updater):
         self.assigner = ab_date_assigner
-        self.commands = commands
+        self.commands = commands.conditional_register(self.assigner)
         self.updater = updater
 
         now = datetime.now()
@@ -1070,18 +1161,33 @@ class UserInterface:
             printF("&e| &fThis program lets you figure out if a day is going to be an A day or a B day.")
             printF("&e| &fNOTE: The program will update its A/B day calculator with unexpected days off (e.g., snow) if they occur.")
             printF(" ")
-            printF("&6HOW?")
-            printF("&e| &fEnter a date below and the program will give you any and all information about it.")
-            printF("&e| &fType &bhelp &fto view all the commands you can utilize and available date formats.")
-            printF("&e| &fType &bcontact &fif you need to contact Noah if you find any bugs or issues.")
-            printF("&e|  ")
-            printF("&e|   &r&6A SINGLE DATE:")
-            printF("&e|   &r&5| &fThe format should be: &aMONTH DAY YEAR")
-            printF("&e|   &r&5| &fFor example: &r&3" + now.strftime("%B " + self.number_of(now) + " %Y"))
-            printF("&e|  ")
-            printF("&e|   &r&6MULTIPLE DATES:")
-            printF("&e|   &r&5| &fThe format should be: &aMONTH DAY YEAR - MONTH DAY YEAR")
-            printF("&e|   &r&5| &fFor example: &r&3" + now.strftime("%B") + " 1 " + now.strftime("%Y") + " - " + now.strftime("%B") + " " + str(get_last_day_of_month(now).day) + " " + now.strftime("%Y"))
+            if self.assigner.fatal_error is None:
+                printF("&6HOW?")
+                printF("&e| &fEnter a date below and the program will give you any and all information about it.")
+                printF("&e| &fType &bhelp &fto view all the commands you can utilize and available date formats.")
+                printF("&e| &fType &bcontact &fif you need to contact Noah if you find any bugs or issues.")
+                printF("&e|  ")
+                printF("&e|   &r&6A SINGLE DATE:")
+                printF("&e|   &r&5| &fThe format should be: &aMONTH DAY YEAR")
+                printF("&e|   &r&5| &fFor example: &r&3" + now.strftime("%B " + self.number_of(now) + " %Y"))
+                printF("&e|  ")
+                printF("&e|   &r&6MULTIPLE DATES:")
+                printF("&e|   &r&5| &fThe format should be: &aMONTH DAY YEAR - MONTH DAY YEAR")
+                printF("&e|   &r&5| &fFor example: &r&3" + now.strftime("%B") + " 1 " + now.strftime("%Y") + " - " + now.strftime("%B") + " " + str(get_last_day_of_month(now).day) + " " + now.strftime("%Y"))
+            else:
+                printF("&6BUT HOLD ON!")
+                printF("&e| &fIt seems a fatal error occurred while trying to grab and/or calculate the necessary information.")
+                printF("&e| &fUnfortunately, &cthis means the program cannot continue as intended.")
+                printF("&e| &fMost features have been disabled to prevent crashes.")
+                printF("&e|  ")
+                printF("&e|   &r&6SOLUTIONS:")
+                printF("&e|   &r&5| &fEnsure you are connected to a stable internet connection.")
+                printF("&e|   &r&5| &fCheck if the program is outdated by typing &bversion&f.")
+                printF("&e|   &r&5|     &7&o(If outdated, consider upgrading by typing &b&oupgrade&7&o)")
+                printF("&e|   &r&5| &fReinstall the program by typing &bupgrade force&f, which can fix a lot of issues.")
+                printF("&e|   &r&5| &fContact the developer for any other issues by typing &bcontact&f.")
+                printF("&e| ")
+                printF(f"&e| &7&oDetected error: &8{str(self.assigner.fatal_error)}, see more with &b&oinspect")
             printF(" ")
             if self.updater.delta_version > 0: # user needs to update teehee
                 printF("&6YOU ARE OUTDATED!")
