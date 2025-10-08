@@ -49,7 +49,7 @@ class Log:
 class Updater:
 
     # this is the version the program thinks it is, please do not change
-    VERSION = "1.8.1"
+    VERSION = "1.8.2"
 
     DOWNLOAD_URL = "https://update.ab.download.noahf.net/"
     CHECK_URL = "https://update.ab.check.noahf.net/"
@@ -1462,6 +1462,25 @@ class UserInterface:
 
         # execute any potential commands, if the evaluate func returns "True", we know it was a real command
         if self.commands.evaluate(self, inputted.strip()):
+            self.ask_input()
+            return
+            
+        if assigner.fatal_error:
+            printF(" ")
+            printF("&c&lFATAL ERROR")
+            printF("&e| &fIt seems a fatal error occurred while trying to grab and/or calculate the necessary information.")
+            printF("&e| &fUnfortunately, &cthis means the program cannot continue as intended.")
+            printF("&e| &fMost features have been disabled to prevent crashes.")
+            printF("&e|  ")
+            printF("&e|   &r&6SOLUTIONS:")
+            printF("&e|   &r&5| &fEnsure you are connected to a stable internet connection.")
+            printF("&e|   &r&5| &fCheck if the program is outdated by typing &bversion&f.")
+            printF("&e|   &r&5|     &7&o(If outdated, consider upgrading by typing &b&oupgrade&7&o)")
+            printF("&e|   &r&5| &fReinstall the program by typing &bupgrade force&f, which can fix a lot of issues.")
+            printF("&e|   &r&5| &fContact the developer for any other issues by typing &bcontact&f.")
+            printF("&e| ")
+            printF(f"&e| &7&oDetected error: &8{str(self.assigner.fatal_error)}, see more with &b&oinspect")
+            printF(" ")
             self.ask_input()
             return
 
