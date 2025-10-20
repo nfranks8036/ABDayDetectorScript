@@ -49,7 +49,7 @@ class Log:
 class Updater:
 
     # this is the version the program thinks it is, please do not change
-    VERSION = "1.8.2"
+    VERSION = "1.8.3"
 
     DOWNLOAD_URL = "https://update.ab.download.noahf.net/"
     CHECK_URL = "https://update.ab.check.noahf.net/"
@@ -757,15 +757,14 @@ class Commands:
         try:
             if command is not None and command["reqs"] is not None and command["reqs"](ui) == False:
                 raise Exception("This command failed a required condition, no other information was specified.")
+                
+            return command["func"](ui, inputted_args) if command is not None else False
         except Exception as err:
-            printF(" ")
             printF(f"&cFailed to execute {str(inputted_command)}, try again later!")
-            printF(f"&7&o{str(err)}")
+            printF(f"&8&o{str(err)} &c&oof type &8&o{str(type(err))}")
             printF(" ")
             return True
         
-        return command["func"](ui, inputted_args) if command is not None else False
-
     def req_no_fatal_errors(self, ui):
         if ui.assigner.fatal_error is None:
             return True
