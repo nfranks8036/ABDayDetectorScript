@@ -31,6 +31,7 @@ class Constants:
 # (that is seriously the only reason this exists)
 class Log:
     log_history = []
+    should_wait = None
     
     @staticmethod
     def text(string: str):
@@ -41,6 +42,17 @@ class Log:
             columns = os.get_terminal_size()[0]
             print(string[0:(columns - 5)] + (" " * (columns - len(string))), end="\r")
         Log.log_history.append(string)
+        
+        if Log.should_wait == None:
+            try:
+                found = sys.argv.index("--log-wait")
+                Log.should_wait = float(sys.argv[found + 1])
+                Log.text("Added a " + str(Log.should_wait) + " program-wide hold between each log message.")
+            except Exception as err:
+                Log.should_wait = -1
+                Log.text("Failed to add should_wait param from --log-wait: " + str(err))
+        if Log.should_wait >= 0.0:
+            threadcontrol.sleep(Log.should_wait)
 
     def get_log_history():
         return Log.log_history
@@ -49,7 +61,7 @@ class Log:
 class Updater:
 
     # this is the version the program thinks it is, please do not change
-    VERSION = "1.8.3"
+    VERSION = "1.8.4"
 
     DOWNLOAD_URL = "https://update.ab.download.noahf.net/"
     CHECK_URL = "https://update.ab.check.noahf.net/"
@@ -906,6 +918,8 @@ class Commands:
                 args.append("--line-log")
             if "-fe" in arg:
                 args[index] = "--force-error"
+            if "-lw" in arg:
+                args[index] = "--log-wait"
 
         if refresh == False:
             printF(" ")
