@@ -1034,7 +1034,7 @@ class Commands:
             printF('&eUpdate by typing "&bupgrade&e"!')
         elif delta == -1:
             printF("&cError checking version status.")
-            printF(f"&f&oCheck for updates manually at &b&n{Updater.CHECK_URL}")
+            printF(f"&f&oCheck for updates manually at &b&n{Constants.GITHUB_LINK}")
 
         printF(" ")
         return True
