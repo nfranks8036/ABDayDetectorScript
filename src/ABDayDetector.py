@@ -61,11 +61,11 @@ class Log:
 class Updater:
 
     # this is the version the program thinks it is, please do not change
-    VERSION = "1.8.4"
+    VERSION = "1.8.5"
 
     DOWNLOAD_URL = "https://update.ab.download.noahf.net/"
     CHECK_URL = "https://update.ab.check.noahf.net/"
-    FOLDER = "https://raw.githubusercontent.com/nfranks8036/ABDayDetectorScript/main/src/"
+    FOLDER = "https://raw.githubusercontent.com/nfranks8036/ABDayDetectorScript/main/src/" # DEPRECATED, NO LONGER USED
     DEV_BUILD = False # True will prevent users from downloading this file or you from uploading it
 
     BLOCK_SIZE = 1024
@@ -140,20 +140,22 @@ class Updater:
                 # this was not a check. githubusercontent is not blocked and thus we will ignorantly use that
                 Log.text("Failed to get from " + self.DOWNLOAD_URL + ", ignorantly assuming file and folder")
                 Log.text("(This sometimes happens because the school blocked 'api.github.com')")
-                json_data = {
-                    "tree": [
-                            {"path": "ABDayDetector.py"}
-                        ]
+                json_data = [
+                    {
+                        "path": "ABDayDetector.py",
+                        "download_url": "https://raw.githubusercontent.com/nfranks8036/ABDayDetectorScript/refs/heads/main/src/ABDayDetector.py"
                     }
+                ]
 
-            Log.text("Folder of all files set to " + str(self.FOLDER) + ", looking to download " + str(len(json_data["tree"])) + " file(s)")
+            amount_of_downloads = str(len(json_data))
+            
+            Log.text("Looking to download " + amount_of_downloads + " file(s)")
 
-            Log.text("Executing ~" + str(len(json_data["tree"])) + " download(s)...")
+            Log.text("Executing ~" + amount_of_downloads + " download(s)...")
             Log.text(" ")
-            tree = json_data["tree"]
             file_urls = []
-            for file in tree:
-                self.download(self.FOLDER + str(file["path"]), __file__)
+            for file in json_data:
+                self.download(file["download_url"], __file__)
         except KeyboardInterrupt as err:
             Log.text("[  ---------       (MANUAL)        ---------  ]")
             Log.text("[  --------- END CHECK FOR UPDATES ---------  ]")
