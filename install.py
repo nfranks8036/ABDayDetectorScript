@@ -10,7 +10,7 @@ import json
 import platform
 import time as threadcontrol
 
-VERSION = "0.7i-08072024"
+VERSION = "0.7.1i-01062026"
 
 def cmd(command):
     if is_external():
@@ -106,7 +106,8 @@ def ask_dependency(name, import_name, desc):
 def script_install():
     import requests # should be installed now
     try:
-        download = requests.get("https://update.ab.download.noahf.net/").text
+        #download = requests.get("https://update.ab.download.noahf.net/").text
+        download = requests.get("https://api.github.com/repos/nfranks8036/ABDayDetectorScript/contents/src").text
         json_data = json.loads(download)
     except Exception as err:
         printF("&8(failed to retrieve list of scripts, ignorantly assuming files and folders: " + str(err) + ")")
@@ -116,13 +117,10 @@ def script_install():
             ]
         }
 
-    FOLDER = "https://raw.githubusercontent.com/nfranks8036/ABDayDetectorScript/main/src/"
-
-    tree = json_data["tree"]
     main = None
-    for file in tree:
-        url = FOLDER + str(file["path"])
-        path = str(file["path"])
+    for file in json_data:
+        url = file["download_url"]
+        path = str(file["name"])
 
         download = requests.get(url).text
         with open(path, "w") as file:
